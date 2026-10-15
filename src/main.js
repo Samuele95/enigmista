@@ -62,6 +62,8 @@ if (staged) {
   const worldReady = fieldReady.then(async (field) => {
     const { createWorld } = await import('./world.js');
     const world = createWorld({ atlas: field.atlas });
+    await new Promise((r) => setTimeout(r));
+    await field.prepareWorld(world);
     field.attachWorld(world);
     return world;
   });

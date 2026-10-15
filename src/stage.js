@@ -43,15 +43,18 @@ export function startStage({ field, world } = {}) {
   const layoutTimeline = () => {
     let cursor = -ENTER;
     for (const s of scenes) {
-      const overflow = Math.max(0, s.body.offsetHeight - s.win.clientHeight) / vh();
-      s.length = Math.max(s.designed, overflow + 2 * ENTER + 0.5);
+      s.overflow = Math.max(0, s.body.offsetHeight - s.win.clientHeight); // cached: render() never reads layout
+      s.length = Math.max(s.designed, s.overflow / vh() + 2 * ENTER + 0.5);
       s.start = cursor;
       s.end = cursor + s.length;
       cursor = s.end;
     }
     pMax = cursor - ENTER;
     track.style.height = `${pMax * vh() + vh()}px`;
+    const inspect = document.querySelector('[data-inspect-track]');
+    inspectMax = inspect ? Math.max(0, inspect.scrollWidth - inspect.parentElement.clientWidth) : 0;
   };
+  let inspectMax = 0;
   const rest = (s) => [Math.max(0, s.start + ENTER), Math.min(pMax, s.end - ENTER)];
   layoutTimeline();
   let relayout = 0;
@@ -140,6 +143,15 @@ export function startStage({ field, world } = {}) {
     scenes.forEach((s, i) => {
       let vis = clamp01(Math.min((p - s.start) / ENTER, (s.end - p) / ENTER));
       if (i === 0) vis = Math.min(vis, revealT());
+      if (vis === 0 && s.hidden) {
+        s.local = 0;
+        return; // already hidden: no style writes for shots that aren't on screen
+      }
+      s.hidden = vis === 0;
+      if (vis > bestVis) {
+        bestVis = vis;
+        best = i;
+      }
       const entering = p < (s.start + s.end) / 2;
       const e = ease(vis);
       s.el.style.opacity = vis > 0 ? 1 : 0;
@@ -157,8 +169,7 @@ export function startStage({ field, world } = {}) {
       const [r0, r1] = rest(s);
       const t = r1 > r0 ? clamp01((p - r0) / (r1 - r0)) : 0;
       s.local = t;
-      const overflow = Math.max(0, s.body.offsetHeight - s.win.clientHeight);
-      s.body.style.transform = overflow ? `translateY(${-t * overflow}px)` : '';
+      s.body.style.transform = s.overflow ? `translateY(${-t * s.overflow}px)` : '';
       // Headlines decipher each time a scene arrives.
       if (vis > 0.55 && !s.shown) {
         s.shown = true;
@@ -168,18 +179,13 @@ export function startStage({ field, world } = {}) {
       } else if (vis === 0) {
         s.shown = false;
       }
-      if (vis > bestVis) {
-        bestVis = vis;
-        best = i;
-      }
     });
     setActive(best);
 
     // Method: horizontal "scroll to inspect" through the stations while the scene holds.
     const method = scenes.find((s) => s.el.id === 'method');
     if (inspectTrack && method) {
-      const max = Math.max(0, inspectTrack.scrollWidth - inspectTrack.parentElement.clientWidth);
-      inspectTrack.style.transform = `translateX(${-method.local * max}px)`;
+      inspectTrack.style.transform = `translateX(${-method.local * inspectMax}px)`;
       const n = inspectTrack.children.length;
       station.textContent = `Station ${pad2(Math.min(n, 1 + Math.floor(method.local * n)))} / ${pad2(n)}`;
     }

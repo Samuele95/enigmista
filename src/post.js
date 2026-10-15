@@ -1,7 +1,7 @@
 // Post-processing for the stage: field → world → bloom → a final "film" pass (grain, vignette,
 // edge chromatic aberration, and a cipher-glitch that rises with camera travel and scroll speed).
 // Everything stays in raw display values — no colour-space conversion anywhere in the chain.
-import { HalfFloatType, Vector2, WebGLRenderTarget } from 'three';
+import { HalfFloatType, Mesh, PlaneGeometry, Scene, Vector2, WebGLRenderTarget } from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
@@ -68,7 +68,28 @@ export function createPost(renderer, fieldScene, fieldCamera) {
   composer.addPass(film);
 
   let glitch = 0;
+  // Precompile programs exactly as they will be used (same render target → same program keys),
+  // via KHR_parallel_shader_compile where available, so first frames don't stall on compiles.
+  const quad = new PlaneGeometry(2, 2);
+  const holder = (materials) => {
+    const scene = new Scene();
+    materials.forEach((m) => scene.add(new Mesh(quad, m)));
+    return scene;
+  };
+  const compileInto = async (rt, scene, camera) => {
+    const prev = renderer.getRenderTarget();
+    renderer.setRenderTarget(rt);
+    const pending = renderer.compileAsync(scene, camera);
+    renderer.setRenderTarget(prev);
+    await pending;
+  };
   return {
+    prepare: (scene, camera) => compileInto(target, scene, camera),
+    async preparePasses(camera) {
+      const bloomMaterials = [bloom.materialHighPassFilter, ...bloom.separableBlurMaterials, bloom.compositeMaterial, bloom.blendMaterial];
+      await compileInto(target, holder(bloomMaterials), camera);
+      await compileInto(null, holder([film.material]), camera);
+    },
     setWorld(world) {
       worldPass.scene = world.scene;
       worldPass.camera = world.camera;

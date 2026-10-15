@@ -71,7 +71,9 @@ export async function startField(canvas, { reducedMotion, mode = 'doc' }) {
   renderer.setPixelRatio(pixelRatio);
   renderer.autoClear = false;
 
+  const nextTask = () => new Promise((r) => setTimeout(r)); // split start-up into short tasks
   const atlas = await buildAtlas();
+  await nextTask();
   const uniforms = {
     uTime: { value: 0 },
     uResolution: { value: new Vector2() },
@@ -151,6 +153,12 @@ export async function startField(canvas, { reducedMotion, mode = 'doc' }) {
     render();
   };
 
+  if (post) {
+    await post.prepare(scene, camera);
+    await nextTask();
+    await post.preparePasses(camera);
+    await nextTask();
+  }
   window.addEventListener('resize', layout);
   if (mode === 'doc') new ResizeObserver(refreshKeepOut).observe(document.body);
   layout();
@@ -174,6 +182,11 @@ export async function startField(canvas, { reducedMotion, mode = 'doc' }) {
       travel = px;
       external = state;
       post?.setGlitch(state.glitch ?? 0);
+    },
+    /** Precompile a world's programs before it is attached (no first-frame compile stall). */
+    async prepareWorld(w) {
+      if (post) await post.prepare(w.scene, w.camera);
+      else await renderer.compileAsync(w.scene, w.camera);
     },
     attachWorld(w) {
       world = w;
