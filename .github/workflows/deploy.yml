@@ -18,18 +18,18 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run build # vite build + scripts/check-dist.mjs
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
-          include-hidden-files: true
+          include-hidden-files: true # v5 drops dotfiles otherwise; keeps .nojekyll
 
   deploy:
     needs: build
@@ -39,4 +39,15 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
+      - name: Smoke-test the live site
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          sleep 15
+          curl -fsS "$PAGE_URL" -o index.html
+          curl -fsS -o /dev/null "${PAGE_URL}.nojekyll"
+          for ref in $(grep -oE '(src|href)="/enigmista/[^"]+"' index.html | cut -d'"' -f2); do
+            echo "GET $ref"
+            curl -fsS -o /dev/null "https://samuele95.github.io${ref}"
+          done
