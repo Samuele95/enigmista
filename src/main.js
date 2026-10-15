@@ -33,20 +33,21 @@ document.querySelectorAll('[data-mode-toggle]').forEach((b) =>
 const sandboxReady = Promise.resolve().then(() => {
   const root = document.querySelector('[data-sandbox]');
   const sandbox = mountSandbox(root, { instant: !staged || reducedMotion });
+  // A direct geometric check (not an IntersectionObserver, whose callbacks wait on the browser's
+  // rendering cadence): enough of the panels on screen while the sandbox is the active shot.
   let here = false;
-  let seen = false;
-  const maybePlay = () => here && seen && !sandbox.played() && sandbox.play();
+  const maybePlay = () => {
+    if (!here || sandbox.played()) return;
+    const r = root.getBoundingClientRect();
+    const visible = Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0);
+    if (visible > Math.min(r.height * 0.45, window.innerHeight * 0.4)) sandbox.play();
+  };
   window.addEventListener('stage:scene', (e) => {
     here = e.detail === 'sandbox';
-    maybePlay();
+    setTimeout(maybePlay);
   });
-  new IntersectionObserver(
-    ([entry]) => {
-      seen = entry.intersectionRatio > 0.45 || entry.intersectionRect.height > window.innerHeight * 0.4;
-      maybePlay();
-    },
-    { threshold: Array.from({ length: 21 }, (_, i) => i / 20) },
-  ).observe(root);
+  window.addEventListener('scroll', () => setTimeout(maybePlay), { passive: true });
+  window.addEventListener('resize', maybePlay);
   return sandbox;
 });
 const fontsReady = document.fonts.ready;
