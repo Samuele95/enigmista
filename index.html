@@ -297,12 +297,19 @@
           <ol class="steps">
             <li>
               <p class="label">01 · Get the skill</p>
-              <p><a class="btn" href="#install" data-pending="skill download">Download the skill</a> <span class="pending">link pending</span></p>
+              <p>
+                <a class="btn" href="https://github.com/Samuele95/enigmista/releases/latest/download/enigmista-skill.zip">Download the skill</a>
+              </p>
+              <p class="note">
+                From the <a href="https://github.com/Samuele95/enigmista/releases/latest">latest GitHub release</a> — the
+                release notes carry the install steps for Claude Code, Gemini CLI, and Hermes.
+              </p>
             </li>
             <li>
               <p class="label">02 · Install (Claude Code)</p>
+              <p>Unzip it into your skills directory:</p>
               <pre><code>~/.claude/skills/enigmista/SKILL.md</code></pre>
-              <p class="pending">Gemini CLI and Hermes steps pending.</p>
+              <p class="note">The method docs ship inside: <code>references/method.md</code>, <code>loop.md</code>, <code>wiring.md</code>.</p>
             </li>
             <li>
               <p class="label">03 · Smoke-test the scorer</p>
@@ -322,7 +329,12 @@
           <p class="note">
             Prefer to talk it through first? The Enigmista Gem on Gemini reasons about the method and writes the
             grammar, sampler code, and scorer command — but can't run the loop, so it never reports coverage as
-            measured. <span class="pending">Gem link pending.</span>
+            measured. Its setup kit is in the same release:
+            <a href="https://github.com/Samuele95/enigmista/releases/latest/download/enigmista-gem.zip">enigmista-gem.zip</a>.
+          </p>
+          <p class="install-links">
+            <a class="btn" href="https://github.com/Samuele95/enigmista">Repository on GitHub</a>
+            <a class="btn btn--quiet" href="https://github.com/Samuele95/enigmista/releases">All releases</a>
           </p>
           <p class="colophon label muted">
             Authorised, defensive research · No analytics, no trackers ·
