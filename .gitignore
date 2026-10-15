@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+
+# Local-only: build handoff notes, the skill reference, session memory
+handoff/
+enigmista-skill-reference/
+.remember/
+.claude/

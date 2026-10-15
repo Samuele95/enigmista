@@ -1,0 +1,23 @@
+{
+  "name": "enigmista-site",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node scripts/check-dist.mjs",
+    "preview": "vite preview",
+    "check:dist": "node scripts/check-dist.mjs"
+  },
+  "engines": {
+    "node": ">=18.19"
+  },
+  "devDependencies": {
+    "vite": "^6.4.4"
+  },
+  "dependencies": {
+    "@fontsource-variable/bodoni-moda": "^5.3.0",
+    "@fontsource/martian-mono": "^5.3.0",
+    "three": "^0.186.1"
+  }
+}
