@@ -242,7 +242,10 @@ export function mountSandbox(root, { instant = false } = {}) {
   };
 
   // ── Controls ───────────────────────────────────────────────────────
-  tauInput.addEventListener('input', () => (tauOut.textContent = Number(tauInput.value).toFixed(1)));
+  tauInput.addEventListener('input', () => {
+    tauOut.textContent = Number(tauInput.value).toFixed(1);
+    window.dispatchEvent(new CustomEvent('sandbox:tau', { detail: Number(tauInput.value) })); // reshapes the drum's spikes
+  });
   tauInput.addEventListener('change', () => phase === 'sample' && draw());
   $('[data-resample]').addEventListener('click', () => (phase === 'sample' ? draw() : final()));
   $('[data-replay]').addEventListener('click', play);

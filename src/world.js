@@ -35,6 +35,9 @@ const LOOP_R = R * 2.3;
 const FOV = 30;
 const BOOKEND = 'enigmista';
 const STATIONS = ['corpus', 'induce', 'sample', 'score', 'refine', 'stop'];
+const CHAPTER_WORD = { hero: BOOKEND, structure: 'structure', uses: 'uses', objective: 'objective', method: 'method', sandbox: 'sandbox', install: BOOKEND };
+const SPIKE_MAX = 0.9; // world units of spike length at p = 1 (scaled by √p so small odds stay visible)
+const KERNEL_SAMPLES = 3000;
 
 // Palette as raw display values: the whole pipeline stays in these numbers (no colour-space
 // conversion), so a hex here is the hex on screen — same as the CSS tokens.
@@ -48,14 +51,14 @@ const C = {
 // Per-chapter poses. Placement (sx/sy/dist) comes from the scene's anchor; these say how the
 // rotor is seen and which set piece is up. slots/uses/readout/station: label groups.
 const POSES = {
-  hero: { az: -0.22, el: 0.12, explode: 0, dim: 1, ghost: 0, branch: 0, loop: 0, aura: 1, lookY: 0, slots: 0, uses: 0, readout: 0, station: 0 },
-  structure: { az: -0.55, el: 0.2, explode: 1, dim: 1, ghost: 0, branch: 0, loop: 0, aura: 0.6, lookY: 0.2, slots: 1, uses: 0, readout: 0, station: 0 },
-  uses: { az: 0.4, el: 0.32, explode: 0, dim: 0.9, ghost: 0, branch: 1, loop: 0, aura: 0.5, lookY: 1.0, slots: 0, uses: 1, readout: 0, station: 0 },
-  objective: { az: -0.25, el: 0.08, explode: 0, dim: 1, ghost: 1, branch: 0, loop: 0, aura: 0.7, lookY: -0.15, slots: 0, uses: 0, readout: 1, station: 0 },
-  method: { az: 0.7, el: 0.3, explode: 0, dim: 0.95, ghost: 0.35, branch: 0, loop: 1, aura: 0.5, lookY: -0.2, slots: 0, uses: 0, readout: 0, station: 1 },
-  sandbox: { az: -0.15, el: 0.1, explode: 0, dim: 0.95, ghost: 0, branch: 0, loop: 0, aura: 0.6, lookY: 0, slots: 0, uses: 0, readout: 0, station: 0 },
-  scope: { az: 1.4, el: 0.2, explode: 0, dim: 0.2, ghost: 0, branch: 0, loop: 0, aura: 0, lookY: 0, slots: 0, uses: 0, readout: 0, station: 0 },
-  install: { az: 0.15, el: 0.14, explode: 0, dim: 1, ghost: 0, branch: 0, loop: 0, aura: 1, lookY: 0, slots: 0, uses: 0, readout: 0, station: 0 },
+  hero: { az: -0.22, el: 0.12, explode: 0, dim: 1, ghost: 0, branch: 0, loop: 0, aura: 1, lookY: 0, slots: 0, uses: 0, readout: 0, station: 0, kernel: 0.55 },
+  structure: { az: -0.55, el: 0.2, explode: 1, dim: 1, ghost: 0, branch: 0, loop: 0, aura: 0.6, lookY: 0.2, slots: 1, uses: 0, readout: 0, station: 0, kernel: 0.35 },
+  uses: { az: 0.4, el: 0.32, explode: 0, dim: 0.9, ghost: 0, branch: 1, loop: 0, aura: 0.5, lookY: 1.0, slots: 0, uses: 1, readout: 0, station: 0, kernel: 0.2 },
+  objective: { az: -0.6, el: 0.12, explode: 0, dim: 1, ghost: 1, branch: 0, loop: 0, aura: 0.7, lookY: -0.15, slots: 0, uses: 0, readout: 1, station: 0, kernel: 1 },
+  method: { az: -0.3, el: 0.16, explode: 0, dim: 0.95, ghost: 0.35, branch: 0, loop: 1, aura: 0.5, lookY: 0, slots: 0, uses: 0, readout: 0, station: 1, kernel: 0.8 },
+  sandbox: { az: -0.45, el: 0.12, explode: 0, dim: 0.95, ghost: 0, branch: 0, loop: 0, aura: 0.6, lookY: 0, slots: 0, uses: 0, readout: 0, station: 0, kernel: 1 },
+  scope: { az: 1.4, el: 0.2, explode: 0, dim: 0.2, ghost: 0, branch: 0, loop: 0, aura: 0, lookY: 0, slots: 0, uses: 0, readout: 0, station: 0, kernel: 0 },
+  install: { az: 0.15, el: 0.14, explode: 0, dim: 1, ghost: 0, branch: 0, loop: 0, aura: 1, lookY: 0, slots: 0, uses: 0, readout: 0, station: 0, kernel: 0.55 },
 };
 const KEYS = [...Object.keys(POSES.hero), 'dist', 'sx', 'sy'];
 
@@ -65,6 +68,7 @@ const clamp01 = (t) => Math.min(1, Math.max(0, t));
 const wrap = (a) => ((((a + Math.PI) % TAU) + TAU) % TAU) - Math.PI;
 const easeOutBack = (t, s = 0.9) => 1 + (s + 1) * (t - 1) ** 3 + s * (t - 1) ** 2;
 const easeOutExpo = (t) => (t >= 1 ? 1 : 1 - 2 ** (-10 * t));
+const wrapUnit = (x) => ((((x + 0.5) % 1) + 1) % 1) - 0.5;
 
 /* ── Shaders ─────────────────────────────────────────────────────────── */
 
@@ -231,6 +235,82 @@ const auraFrag = /* glsl */ `
   void main() {
     vec2 d = (vUv - 0.5) * vec2(1.0, 1.6);
     gl_FragColor = vec4(uColor, exp(-dot(d, d) * 9.0) * uOpacity);
+  }
+`;
+
+// Kernel spikes: one per disc slot, radial, length ∝ √p(glyph | position); turn with their disc.
+const spikeVert = /* glsl */ `
+  attribute float aRing;
+  attribute float aSlot;
+  attribute float aP;
+  uniform float uRingAngle[${RINGS}];
+  uniform float uRingX[${RINGS}];
+  uniform float uKernel;
+  varying float vP;
+  varying float vFront;
+  varying float vFacing;
+  void main() {
+    int r = int(aRing + 0.5);
+    float a = aSlot / ${glsl(SLOTS)} * 6.2831853 + uRingAngle[r];
+    vec3 n = vec3(0.0, sin(a), cos(a));
+    vec3 t = vec3(0.0, cos(a), -sin(a));
+    float len = sqrt(aP) * ${glsl(SPIKE_MAX)} * uKernel;
+    vec3 p = vec3(uRingX[r] + position.x, 0.0, 0.0) + n * (${glsl(CAP_R + 0.03)} + position.y * len) + t * position.z;
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    vFacing = dot(normalize(normalMatrix * n), normalize(-mv.xyz));
+    float w = mod(a + 3.14159265, 6.2831853) - 3.14159265;
+    vFront = 1.0 - smoothstep(0.5, 1.5, abs(w) / (6.2831853 / ${glsl(SLOTS)}));
+    vP = aP;
+    gl_Position = projectionMatrix * (aP > 0.0005 ? mv : vec4(0.0, 0.0, -2.0, 1.0));
+  }
+`;
+
+const spikeFrag = /* glsl */ `
+  uniform vec3 uEmber;
+  uniform vec3 uBone;
+  uniform float uKernel;
+  uniform float uDim;
+  varying float vP;
+  varying float vFront;
+  varying float vFacing;
+  void main() {
+    float glow = 0.35 + 1.6 * sqrt(vP);
+    vec3 col = mix(uEmber, uBone, vFront * 0.6);
+    gl_FragColor = vec4(col * glow, uKernel * uDim * smoothstep(-0.2, 0.4, vFacing) * (0.5 + vFront * 0.8));
+  }
+`;
+
+// Template wheel on the left cap: sectors ∝ p(template)^(1/τ), a needle on the template just drawn.
+const wheelFrag = /* glsl */ `
+  uniform float uEdges[5];
+  uniform float uActive;
+  uniform float uNeedle;
+  uniform float uOpacity;
+  uniform vec3 uEmber;
+  uniform vec3 uAsh;
+  varying vec2 vUv;
+  void main() {
+    vec2 d = vUv - 0.5;
+    float r = length(d) * 2.0;
+    if (r > 1.0) discard;
+    float a = fract(atan(d.x, d.y) / 6.2831853 + 1.0); // 0 at the top, clockwise
+    float idx = 0.0;
+    float edge = 1.0;
+    for (int i = 1; i < 5; i++) {
+      if (a >= uEdges[i]) idx = float(i);
+      edge = min(edge, abs(a - uEdges[i]) * r * 6.2831853);
+    }
+    edge = min(edge, a * r * 6.2831853);
+    float band = smoothstep(0.4, 0.43, r) * (1.0 - smoothstep(0.95, 0.98, r));
+    float divider = smoothstep(0.006, 0.02, edge);
+    float on = idx == uActive ? 1.0 : 0.0;
+    vec3 col = mix(uAsh * 0.55, uEmber, mod(idx, 2.0) * 0.35 + 0.45 + on * 0.5);
+    float needleA = fract(uNeedle);
+    float da = abs(a - needleA);
+    da = min(da, 1.0 - da) * r * 6.2831853;
+    float needle = (1.0 - smoothstep(0.004, 0.016, da)) * step(r, 0.97);
+    float rim = smoothstep(0.97, 0.985, r) * (1.0 - smoothstep(0.99, 1.0, r));
+    gl_FragColor = vec4(col * band * divider + uEmber * (needle * 1.4 + rim * 0.6), (band * divider * 0.85 + needle + rim) * uOpacity);
   }
 `;
 
@@ -420,12 +500,11 @@ export function createWorld({ atlas }) {
     new TorusGeometry(LOOP_R, 0.006, 6, 240),
     new MeshBasicMaterial({ color: C.ash, transparent: true, opacity: 0 }),
   );
-  loopRing.rotation.y = Math.PI / 2;
-  loop.add(loopRing);
+  loop.add(loopRing); // in the camera-facing plane: the ring turns to bring a station to the reading side
   const loopNodes = Array.from({ length: 6 }, (_, k) => {
     const a = (k / 6) * TAU;
     const node = new Mesh(new SphereGeometry(0.07, 16, 12), new MeshBasicMaterial({ color: C.ash, transparent: true, opacity: 0 }));
-    node.position.set(0, Math.sin(a) * LOOP_R, Math.cos(a) * LOOP_R);
+    node.position.set(Math.cos(a) * LOOP_R, Math.sin(a) * LOOP_R, 0);
     loop.add(node);
     return node;
   });
@@ -451,6 +530,9 @@ export function createWorld({ atlas }) {
     return el;
   });
   const readoutLabel = makeLabel('world-label--readout');
+  const wheelLabel = makeLabel('world-label--kernel');
+  const spikeLabel = makeLabel('world-label--kernel');
+  spikeLabel.textContent = 'spike length · p(glyph | position)';
   const stationLabel = makeLabel('world-label--station');
   const tmp = new Vector3();
   const place = (el, point, opacity, inRotor = true) => {
@@ -504,10 +586,85 @@ export function createWorld({ atlas }) {
   };
 
   const drawSample = (now, fast) => {
-    const s = sample(TOY_GRAMMAR, { tau: 1.4 });
+    const s = sample(TOY_GRAMMAR, { tau: kernel.tau });
     tally.drawn++;
+    wheel.active = TOY_GRAMMAR.templates.findIndex((t) => t.id === s.template);
     spinTo(s.pw, now, { chars: s.chars, fast });
   };
+
+  /* ── The kernel, in geometry ───────────────────────────────────────── */
+  // Spikes: p(glyph | disc) estimated by sampling the induced grammar at τ, with words centred on
+  // the drum exactly as the sampler places them. Wheel: template odds p^(1/τ), renormalised.
+  const kernel = { tau: 1.4 };
+  const spikeGeo = new InstancedBufferGeometry();
+  const spikeBox = new BoxGeometry(0.05, 1, 0.028).translate(0, 0.5, 0);
+  spikeGeo.index = spikeBox.index;
+  spikeGeo.setAttribute('position', spikeBox.getAttribute('position'));
+  spikeGeo.setAttribute('aRing', new InstancedBufferAttribute(aRing, 1));
+  spikeGeo.setAttribute('aSlot', new InstancedBufferAttribute(aSlot, 1));
+  const aP = new Float32Array(n);
+  const aPAttr = new InstancedBufferAttribute(aP, 1);
+  spikeGeo.setAttribute('aP', aPAttr);
+  spikeGeo.instanceCount = n;
+  const spikeMat = new ShaderMaterial({
+    vertexShader: spikeVert,
+    fragmentShader: spikeFrag,
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+    uniforms: {
+      uRingAngle: { value: ringAngle }, uRingX: { value: ringX }, uKernel: { value: 0 }, uDim: { value: 1 },
+      uEmber: { value: C.ember }, uBone: { value: C.bone },
+    },
+  });
+  const spikes = new Mesh(spikeGeo, spikeMat);
+  spikes.frustumCulled = false;
+  rotor.add(spikes);
+
+  const wheel = { active: -1, needle: 0, target: 0 };
+  const wheelMat = new ShaderMaterial({
+    vertexShader: auraVert,
+    fragmentShader: wheelFrag,
+    transparent: true,
+    depthWrite: false,
+    uniforms: {
+      uEdges: { value: [0, 0, 0, 0, 0] }, uActive: { value: -1 }, uNeedle: { value: 0 }, uOpacity: { value: 0 },
+      uEmber: { value: C.ember }, uAsh: { value: C.ash },
+    },
+  });
+  const wheelMesh = new Mesh(new PlaneGeometry(CAP_R * 1.9, CAP_R * 1.9), wheelMat);
+  wheelMesh.rotation.y = -Math.PI / 2; // faces out of the left cap (−x)
+  wheelMesh.position.x = -CAP_W / 2 - 0.004;
+  caps[0].add(wheelMesh);
+
+  const computeKernel = () => {
+    const counts = new Float32Array(n);
+    for (let k = 0; k < KERNEL_SAMPLES; k++) {
+      centred(sample(TOY_GRAMMAR, { tau: kernel.tau }).chars).forEach(({ ch }, r) => {
+        const c = RING_SET.indexOf(ch.toLowerCase());
+        if (c > 0) counts[r * SLOTS + c]++; // slot 0 is the blank: no glyph at this position
+      });
+    }
+    for (let i = 0; i < n; i++) aP[i] = counts[i] / KERNEL_SAMPLES;
+    aPAttr.needsUpdate = true;
+    const w = TOY_GRAMMAR.templates.map((t) => t.p ** (1 / kernel.tau));
+    const sum = w.reduce((a, b) => a + b, 0);
+    kernel.templates = TOY_GRAMMAR.templates.map((t, i) => ({ ...t, q: w[i] / sum }));
+    let acc = 0;
+    const edges = wheelMat.uniforms.uEdges.value;
+    kernel.templates.forEach((t, i) => {
+      edges[i] = acc;
+      acc += t.q;
+    });
+    edges[4] = 1;
+  };
+  computeKernel();
+  let tauTimer = 0;
+  window.addEventListener('sandbox:tau', (e) => {
+    kernel.tau = e.detail;
+    clearTimeout(tauTimer);
+    tauTimer = setTimeout(computeKernel, 90);
+  });
 
   let batch = []; // the sandbox's current list: cycled on the drum while the visitor is there
   let sandboxPhase = null; // the induction step running in the sandbox, spelled on the drum
@@ -525,12 +682,19 @@ export function createWorld({ atlas }) {
   const at = (id) => ids.indexOf(id);
   const pose = { chapter: 0, local: 0, transit: 0, velocity: 0 };
   let inSandbox = false;
+  let arrival = null; // on reaching a chapter, the drum spells its name
+  window.addEventListener('stage:scene', (e) => {
+    const word = CHAPTER_WORD[e.detail];
+    arrival = word ? { word, t: performance.now() } : null;
+  });
+  const stationOf = () => Math.max(0, Math.min(5, Math.round(pose.local * 5)));
   const mode = () => {
     const c = pose.chapter;
     const here = Math.abs(c - at('sandbox')) < 0.5;
     if (here && !inSandbox) window.dispatchEvent(new CustomEvent('sandbox:request')); // replay its list
     inSandbox = here;
     if (intro.active) return { word: BOOKEND };
+    if (arrival && performance.now() - arrival.t < 3400) return { word: arrival.word };
     if (c >= at('scope') + 0.5) return { word: BOOKEND };
     if (here && sandboxPhase && sandboxPhase !== 'sample') return { word: sandboxPhase };
     if (here && batch.length) {
@@ -538,7 +702,7 @@ export function createWorld({ atlas }) {
       return { queue: true };
     }
     if (Math.abs(c - at('method')) < 0.5) {
-      const s = Math.min(5, Math.floor(pose.local * 6));
+      const s = stationOf();
       if (s === 2) return { sample: true, fast: true, hold: 350 };
       if (s === 3) return { sample: true, fast: true, hold: 700 };
       return { word: STATIONS[s], refine: s === 4 };
@@ -628,15 +792,38 @@ export function createWorld({ atlas }) {
     return best;
   };
   const interactive = () => pose.chapter < 0.5 || Math.abs(pose.chapter - at('objective')) < 0.5;
+  // Grab the drum and turn it: dragging rolls the discs; a decisive turn moves a chapter.
+  const drag = { on: false, y0: 0, last: 0, moved: false };
+  const usable = () => !intro.active && now3.dim > 0.3;
+  window.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0 || e.target.closest('a, button, input') || !usable()) return;
+    if (ringUnder(e.clientX, e.clientY) < 0) return;
+    Object.assign(drag, { on: true, y0: e.clientY, last: e.clientY, moved: false });
+    document.documentElement.classList.add('is-dragging-rotor');
+  });
   window.addEventListener('pointermove', (e) => {
     pointer.tx = (e.clientX / window.innerWidth) * 2 - 1;
     pointer.ty = (e.clientY / window.innerHeight) * 2 - 1;
-    const ring = intro.active ? -1 : ringUnder(e.clientX, e.clientY);
+    if (drag.on) {
+      rings.forEach((r) => (r.offVel -= (e.clientY - drag.last) * 0.9));
+      drag.last = e.clientY;
+      if (Math.abs(e.clientY - drag.y0) > 6) drag.moved = true;
+      return;
+    }
+    const ring = usable() ? ringUnder(e.clientX, e.clientY) : -1;
     if (ring >= 0 && ring !== pointer.ring) rings[ring].offVel += 5.5;
     pointer.ring = ring;
-    document.documentElement.classList.toggle('is-over-rotor', ring >= 0 && interactive());
+    document.documentElement.classList.toggle('is-over-rotor', ring >= 0);
+  });
+  window.addEventListener('pointerup', (e) => {
+    if (!drag.on) return;
+    drag.on = false;
+    document.documentElement.classList.remove('is-dragging-rotor');
+    const dy = e.clientY - drag.y0;
+    if (Math.abs(dy) > 60) window.dispatchEvent(new CustomEvent('rotor:navigate', { detail: dy < 0 ? 1 : -1 }));
   });
   window.addEventListener('click', (e) => {
+    if (drag.moved) return void (drag.moved = false);
     if (e.target.closest('a, button') || !interactive() || ringUnder(e.clientX, e.clientY) < 0) return;
     drawSample(lastNow, true);
   });
@@ -681,9 +868,73 @@ export function createWorld({ atlas }) {
     };
   };
 
+  // Text bound to the drum (wide screens): the real DOM text of Uses and Method rides 3D points.
+  const useItems = [...document.querySelectorAll('#uses .uses > li')];
+  const stationItems = [...document.querySelectorAll('#method [data-inspect-track] > li')];
+  const sizes = new Map();
+  const toScreen = (v) => {
+    tmp.copy(v).project(camera);
+    return { x: ((tmp.x + 1) / 2) * view.w, y: ((1 - tmp.y) / 2) * view.h };
+  };
+  // In bound mode the Uses list and the Method stations are lifted out of the shot's content
+  // window (which clips and fades its edges) into the shot itself; they go back on narrow screens.
+  const lifted = ['#uses .uses', '#method .inspect']
+    .map((sel) => document.querySelector(sel))
+    .filter(Boolean)
+    .map((el) => {
+      const marker = document.createComment('bound-text');
+      el.before(marker);
+      return { el, marker, scene: el.closest('[data-scene]') };
+    });
+  const setLifted = (bound) =>
+    lifted.forEach(({ el, marker, scene }) => {
+      if (bound && el.parentElement !== scene) scene.append(el);
+      if (!bound && el.parentElement === scene) marker.after(el);
+    });
+  const overlaps = (a, b) => a.x < b.right && a.x + a.w > b.left && a.y < b.bottom && a.y + a.h > b.top;
+  // side: where the block sits relative to its point — 'left' | 'right' | 'above'. It is clamped to
+  // the frame and pushed clear of `avoid` (the shot's headline and blocks already placed).
+  const bind = (el, point, side, opacity, avoid) => {
+    const { w, h } = sizes.get(el) ?? { w: 0, h: 0 };
+    const at = toScreen(point);
+    const r = { w, h, x: side === 'left' ? at.x - w - 18 : side === 'right' ? at.x + 18 : at.x - w / 2 };
+    r.y = side === 'above' ? at.y - h - 18 : at.y - h / 2;
+    const clampX = (x) => Math.min(view.w - w - 24, Math.max(24, x));
+    const clampY = (y) => Math.min(view.h - h - 84, Math.max(84, y));
+    const clear = (c) => !avoid.some((o) => overlaps(c, o));
+    r.x = clampX(r.x);
+    r.y = clampY(r.y);
+    if (!clear(r)) {
+      // Search beside each obstacle (below, above, right, left); keep the first clear spot, else
+      // the original. Candidates are clamped to the frame, so a "fix" can't drift off-screen.
+      const candidates = avoid.flatMap((o) => [
+        { x: r.x, y: o.bottom + 14 }, { x: r.x, y: o.top - h - 14 },
+        { x: o.right + 14, y: r.y }, { x: o.left - w - 14, y: r.y },
+      ]).map((c) => ({ w, h, x: clampX(c.x), y: clampY(c.y) }));
+      const spot = candidates.find(clear);
+      if (spot) Object.assign(r, spot);
+    }
+    avoid.push({ left: r.x, right: r.x + w, top: r.y, bottom: r.y + h });
+    const box = el.parentElement.getBoundingClientRect();
+    el.style.transform = `translate(${r.x - box.left}px, ${r.y - box.top}px)`;
+    el.style.opacity = String(opacity);
+  };
+  const headlineRects = (id) =>
+    [...document.querySelectorAll(`#${id} .scene__body > :is(.eyebrow, h2, .lede, .eyebrow-row)`)]
+      .map((el) => el.getBoundingClientRect())
+      .filter((r) => r.width);
+  const nodeWorld = new Vector3();
+
   const resize = (w, h) => {
     view.w = w;
     view.h = h;
+    const bound = w >= 1180 && h >= 680; // room for text beside the drum; smaller screens keep the column layout
+    document.documentElement.classList.toggle('is-bound', bound);
+    setLifted(bound);
+    [...useItems, ...stationItems].forEach((el) => {
+      if (!bound) el.style.transform = el.style.opacity = '';
+      sizes.set(el, { w: el.offsetWidth, h: el.offsetHeight });
+    });
     camera.aspect = w / h;
     ghostMat.uniforms.uPixelRatio.value = Math.min(window.devicePixelRatio, 1.5);
     for (const id of ids) {
@@ -708,11 +959,7 @@ export function createWorld({ atlas }) {
 
   const poseFor = (id) => {
     const p = { ...POSES[id], ...fits[id] };
-    if (id === 'method') {
-      p.az += pose.local * TAU; // a full orbit as the stations scrub past
-      const s = pose.local * 6;
-      if (Math.floor(s) === 1) p.explode = 0.7 * (1 - (s % 1)); // induce: the discs assemble
-    }
+    if (id === 'method' && stationOf() === 1) p.explode = 0.65; // induce: the grammar, exploded into its slots
     return p;
   };
 
@@ -784,6 +1031,19 @@ export function createWorld({ atlas }) {
     barMat.opacity = 0.75 * dim;
     rimMat.opacity = 0.9 * dim;
 
+    // The kernel: spikes on every disc, the template wheel on the left cap.
+    spikeMat.uniforms.uKernel.value = now3.kernel * introGain;
+    spikeMat.uniforms.uDim.value = dim;
+    spikes.visible = now3.kernel > 0.01;
+    wheelMat.uniforms.uOpacity.value = now3.kernel * dim;
+    wheelMat.uniforms.uActive.value = phase === 'hold' ? wheel.active : -1;
+    if (wheel.active >= 0) {
+      const e = wheelMat.uniforms.uEdges.value;
+      wheel.target = (e[wheel.active] + e[wheel.active + 1]) / 2;
+    }
+    wheel.needle += wrapUnit(wheel.target - wheel.needle) * 0.08;
+    wheelMat.uniforms.uNeedle.value = wheel.needle;
+
     const glowing = hit && phase === 'hold';
     aura.position.copy(rotor.position);
     aura.quaternion.copy(camera.quaternion);
@@ -806,8 +1066,10 @@ export function createWorld({ atlas }) {
 
     loop.visible = now3.loop > 0.01;
     loopRing.material.opacity = 0.5 * now3.loop;
-    const station = Math.min(5, Math.floor(pose.local * 6));
+    const station = stationOf();
     const inMethod = Math.abs(pose.chapter - at('method')) < 0.5;
+    loop.position.copy(rotor.position);
+    loop.rotation.z += wrap(Math.PI - (station / 6) * TAU - loop.rotation.z) * 0.06; // current station → reading side
     loopNodes.forEach((node, k) => {
       node.material.opacity = now3.loop;
       node.material.color.copy(k === station && inMethod ? C.ember : C.ash);
@@ -828,12 +1090,29 @@ export function createWorld({ atlas }) {
       el.textContent = g.slot === 'name' ? '⟨name⟩' : SLOT_LABELS[g.slot] ? `⟨${SLOT_LABELS[g.slot]}⟩` : `'${g.slot}'`;
       place(el, new Vector3((ringX[g.start] + ringX[g.end]) / 2, CAP_R + 0.42, 0), now3.slots * dim);
     });
+    const bound = document.documentElement.classList.contains('is-bound');
+    const usesOn = now3.uses * clamp01(now3.branch * 1.4 - 0.3);
     useLabels.forEach((el, i) => {
-      place(el, new Vector3(0, 0.32, 0).add(branchTips[i]), now3.uses * clamp01(now3.branch * 1.4 - 0.3), false);
+      place(el, new Vector3(0, 0.32, 0).add(branchTips[i]), bound ? 0 : usesOn, false);
       el.classList.toggle('is-hi', useHi[i] > 0.5);
     });
+    if (bound && usesOn > 0.01) {
+      const avoid = headlineRects('uses');
+      useItems.forEach((el, i) => bind(el, branchTips[i], ['left', 'above', 'right'][i], usesOn, avoid));
+    }
+    if (bound && inMethod) {
+      loopNodes[station].getWorldPosition(nodeWorld);
+      const avoid = headlineRects('method');
+      stationItems.forEach((el, k) => {
+        el.classList.toggle('is-current', k === station);
+        if (k === station) bind(el, nodeWorld, 'left', 1, avoid);
+      });
+    }
+    wheelLabel.textContent = `templates · τ ${kernel.tau.toFixed(1)}`;
+    place(wheelLabel, new Vector3(caps[0].position.x - 0.3, -CAP_R - 0.4, 0), now3.kernel > 0.9 ? now3.kernel * dim : 0);
+    place(spikeLabel, new Vector3(0, CAP_R + SPIKE_MAX + 0.35, 0), now3.kernel > 0.9 && !now3.slots ? now3.kernel * dim * 0.85 : 0);
     readoutLabel.textContent = `toy sampler · ${tally.drawn} drawn · held-out ${tally.hits.size}/${TOY_HELDOUT.size} hit`;
-    place(readoutLabel, new Vector3(0, -CAP_R - 0.55, 0), now3.readout);
+    place(readoutLabel, new Vector3(0, -CAP_R - 1.05, 0), now3.readout);
     stationLabel.textContent = `station ${String(station + 1).padStart(2, '0')} · ${STATIONS[station]}`;
     place(stationLabel, new Vector3(0, -LOOP_R - 0.45, 0), now3.station * (inMethod ? 1 : 0));
   };
@@ -843,7 +1122,10 @@ export function createWorld({ atlas }) {
     camera,
     resize,
     update,
-    debug: () => ({ fits, now3: { ...now3 }, view: { ...view }, pose: { ...pose } }),
+    debug: () => ({
+      fits, now3: { ...now3 }, view: { ...view }, pose: { ...pose },
+      loop: { rotZ: loop.rotation.z, station: stationOf(), nodes: loopNodes.map((nd) => toScreen(nd.getWorldPosition(new Vector3()))) },
+    }),
     /** chapter: float scene index (fractional in transit); local: 0..1 progress within the scene;
      *  transit: 0 at rest → 1 mid-travel; velocity: signed scroll speed (viewports/s, smoothed). */
     setChapter(chapter, local, { transit = 0, velocity = 0 } = {}) {

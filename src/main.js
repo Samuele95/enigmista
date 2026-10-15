@@ -46,7 +46,8 @@ const sandboxReady = Promise.resolve().then(() => {
     here = e.detail === 'sandbox';
     setTimeout(maybePlay);
   });
-  window.addEventListener('scroll', () => setTimeout(maybePlay), { passive: true });
+  window.addEventListener('scroll', () => setTimeout(maybePlay), { passive: true }); // calm document
+  window.addEventListener('stage:moved', maybePlay); // stage: after each beat
   window.addEventListener('resize', maybePlay);
   return sandbox;
 });

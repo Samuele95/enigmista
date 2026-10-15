@@ -60,13 +60,16 @@ for (const vp of VIEWPORTS) {
     await page.evaluate((i) => window.__stage.jump(i), i);
     await sleep(350);
     const r = await page.evaluate(() => {
-      window.__field.frames(4);
+      window.__field.frames(12);
       const vw = document.documentElement.clientWidth;
       const scene = document.querySelector('.scene.is-active');
       const anchor = scene.querySelector(':scope > .rotor-anchor');
       const a = anchor && getComputedStyle(anchor).display !== 'none' ? anchor.getBoundingClientRect() : null;
       const wide = window.innerWidth >= 1000;
+      // Text bound to the Rotor (Uses tips, Method stations) sits on its area by design.
+      const bound = document.documentElement.classList.contains('is-bound');
       const texts = [...scene.querySelectorAll('.scene__body :is(h1, h2, h3, p, li, dt, dd, pre, .btn)')]
+        .filter((el) => !(bound && el.closest('.uses, .inspect')))
         .map((el) => ({ el, r: el.getBoundingClientRect() }))
         .filter(({ r }) => r.width && r.height && r.bottom > 0 && r.top < window.innerHeight);
       const overlap = a && wide
@@ -76,13 +79,43 @@ for (const vp of VIEWPORTS) {
       const escaping = texts
         .filter(({ el, r }) => (r.right > vw + 1 || r.left < -1) && !el.closest('.inspect, pre'))
         .map(({ el }) => el.tagName + ':' + el.textContent.trim().slice(0, 30));
-      return { id: scene.id, overflow: document.documentElement.scrollWidth > vw, overlap, escaping };
+      // Bound blocks (Uses tips, the current Method station): clear of the headline and each other.
+      const boundBlocks = bound
+        ? [...scene.querySelectorAll('.uses > li, .inspect__track > li.is-current')]
+            .map((el) => el.getBoundingClientRect())
+            .filter((r) => r.width)
+        : [];
+      const heads = [...scene.querySelectorAll('.scene__body > :is(.eyebrow, h2, .lede, .eyebrow-row)')]
+        .map((el) => el.getBoundingClientRect())
+        .filter((r) => r.width);
+      const hit = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 2 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 2;
+      const boundClash = boundBlocks.some((r, i) => heads.some((h) => hit(r, h)) || boundBlocks.some((q, j) => j > i && hit(r, q)));
+      const boundOff = boundBlocks.some((r) => r.left < 0 || r.right > vw || r.top < 0 || r.bottom > window.innerHeight);
+      return { id: scene.id, overflow: document.documentElement.scrollWidth > vw, overlap, escaping, boundClash, boundOff };
     });
     if (r.id !== ids[i]) note(`${tag}: jump(${i}) landed on ${r.id}, expected ${ids[i]}`);
     if (r.overflow) note(`${tag} ${r.id}: horizontal page overflow`);
     if (r.overlap.length) note(`${tag} ${r.id}: text overlaps the Rotor anchor → ${r.overlap.slice(0, 3).join(' | ')}`);
     if (r.escaping.length) note(`${tag} ${r.id}: text escapes the viewport → ${r.escaping.slice(0, 3).join(' | ')}`);
+    if (r.boundClash) note(`${tag} ${r.id}: bound text overlaps the headline or another bound block`);
+    if (r.boundOff) note(`${tag} ${r.id}: bound text is off-screen`);
   }
+  // Movie mode: no native scroll, and one trackpad flick (a burst of wheel events) = one beat.
+  const movie = await page.evaluate(async () => {
+    window.__stage.jump(0);
+    const before = window.__stage.beats().findIndex((b) => b.p === window.__stage.playhead.p);
+    for (let k = 0; k < 25; k++) {
+      window.dispatchEvent(new WheelEvent('wheel', { deltaY: 40, cancelable: true }));
+      await new Promise((r) => setTimeout(r, 16));
+    }
+    for (let t = 0; t < 80 && window.__stage.playhead.moving; t++) await new Promise((r) => setTimeout(r, 100));
+    const p = window.__stage.playhead.p;
+    const beats = window.__stage.beats();
+    const after = beats.reduce((best, b, i) => (Math.abs(b.p - p) < Math.abs(beats[best].p - p) ? i : best), 0);
+    return { before, after, scrollable: document.documentElement.scrollHeight > window.innerHeight + 1 && getComputedStyle(document.documentElement).overflow !== 'hidden' };
+  });
+  if (movie.after - movie.before !== 1) note(`${tag}: one wheel flick moved ${movie.after - movie.before} beats (expected 1)`);
+  if (movie.scrollable) note(`${tag}: the stage still scrolls natively`);
   const entry = await page.evaluate(() =>
     document.querySelectorAll('input:not([type=range]):not([type=checkbox]):not([type=radio]), textarea, [contenteditable]').length,
   );

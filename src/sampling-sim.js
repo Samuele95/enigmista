@@ -26,8 +26,8 @@ export class SamplingSim {
     this.still = false;
     this.ambGlyph = new Uint8Array(cols * rows);
     this.ambLevel = new Float32Array(cols * rows);
-    this.maxLanes = Math.max(6, Math.round((cols * rows) / 110));
-    this.ambientPerTick = Math.max(2, Math.round((cols * rows) / 300));
+    this.maxLanes = Math.max(8, Math.round((cols * rows) / 85));
+    this.ambientPerTick = Math.max(3, Math.round((cols * rows) / 230));
   }
 
   /** Document-cell rects ({x0, y0, x1, y1}, inclusive) where text sits: no lanes, no ambient.

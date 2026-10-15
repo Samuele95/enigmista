@@ -790,8 +790,16 @@ button {
   display: none;
 }
 
+/* Movie mode: like the references, the stage does not scroll — a playhead moves through beats. */
+.is-stage,
 .is-stage body {
+  overflow: hidden;
   overscroll-behavior: none;
+  height: 100%;
+}
+
+.is-stage .track {
+  display: none;
 }
 
 .is-stage .scene {
@@ -1233,7 +1241,13 @@ button {
 }
 
 .is-over-rotor .scene {
-  cursor: pointer;
+  cursor: grab;
+}
+
+.is-dragging-rotor,
+.is-dragging-rotor * {
+  cursor: grabbing !important;
+  user-select: none;
 }
 
 /* ── Reveal: the HUD draws itself in after the boot ───── */
@@ -1289,3 +1303,88 @@ button {
 .is-revealing .hud__rail li:nth-child(6) { animation-delay: 2.6s; }
 .is-revealing .hud__rail li:nth-child(7) { animation-delay: 2.7s; }
 .is-revealing .hud__rail li:nth-child(8) { animation-delay: 2.8s; }
+
+/* ── Text bound to the Rotor (wide screens, with the 3D world) ──────── */
+.world-label--kernel {
+  color: var(--ash);
+  font-size: 0.5625rem;
+}
+
+@media (min-width: 1000px) {
+  /* Bound shots set their headline at the top; the drum and its texts own the rest of the frame. */
+  .is-bound :is(#uses, #method) .scene__window {
+    align-content: start;
+  }
+
+  /* Uses: the three texts ride their branch tips; the drum takes the lower centre-right. */
+  /* Lifted out of the content window into the shot (see world.js): a zero-size origin layer. */
+  .is-bound #uses > .uses,
+  .is-bound #method > .inspect {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    overflow: visible;
+  }
+
+  .is-bound #uses .uses > li {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: min(15rem, 21vw);
+    padding: 0.65rem 0.8rem;
+    font-size: 0.88em;
+    border: 1px solid color-mix(in srgb, var(--ember) 30%, transparent);
+    background: color-mix(in srgb, var(--void) 72%, transparent);
+    opacity: 0;
+    will-change: transform, opacity;
+  }
+
+  .is-bound #uses .uses > li h3 {
+    font-size: 1.25rem;
+  }
+
+  .is-bound #uses .rotor-anchor {
+    top: 44%;
+    bottom: calc(var(--win-bottom) + 2vh);
+    left: 26%;
+    width: auto;
+    height: auto;
+  }
+
+  /* Method: one station at a time, beside its node on the turning loop ring. */
+  .is-bound #method .inspect__track {
+    display: block;
+  }
+
+  .is-bound #method .inspect__track > li {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: min(26rem, 34vw);
+    opacity: 0;
+    transition: opacity 0.7s ease;
+    will-change: transform, opacity;
+  }
+
+  .is-bound #method .inspect__track > li.is-current {
+    opacity: 1;
+  }
+
+  .is-bound #method .inspect__hint {
+    display: none;
+  }
+
+  .is-bound #method .rotor-anchor {
+    top: 22%;
+    bottom: calc(var(--win-bottom) + 2vh);
+    left: calc(var(--win-left) + min(34rem, 40vw) + 2.5rem); /* starts where the text column ends */
+    width: auto;
+    height: auto;
+  }
+
+  .is-bound #method :is(h2, .lede) {
+    max-width: min(34rem, 40vw);
+  }
+}
