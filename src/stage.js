@@ -230,7 +230,10 @@ export function startStage({ field, world } = {}) {
     motion.velocity += ((p - motion.p) / dt - motion.velocity) * 0.15;
     motion.p = p;
     motion.t = time;
-    if (revealT() < 1 || Math.abs(motion.velocity) > 0.01) render();
+    // Render through the reveal (plus one frame at its end, so no block is left part-faded).
+    const revealing = revealT() < 1 || !motion.revealed;
+    if (revealT() >= 1) motion.revealed = true;
+    if (revealing || Math.abs(motion.velocity) > 0.01) render();
     requestAnimationFrame(raf);
   };
   requestAnimationFrame(raf);
