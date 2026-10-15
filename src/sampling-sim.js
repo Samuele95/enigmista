@@ -1,6 +1,9 @@
 // CPU side of the background "sampling field": a grid of glyph cells where toy candidates
 // scramble within their slot classes, lock left→right, hold, and dissolve. Toy held-out
-// hits flash teal. Writes one RGBA texel per cell: glyph, state, intensity.
+// hits flash teal. Writes one RGBA texel per visible cell: glyph, state, intensity.
+//
+// Lanes and keep-out rects live in *document* rows, so the field scrolls with the page and
+// never runs behind text. The texture is a window of `rows` rows starting at `topRow`.
 import { sample } from './sampler.js';
 import { TOY_GRAMMAR, TOY_HELDOUT } from './toy/grammar.js';
 import { CLASSES, glyphIndex, randomOf } from './glyphs.js';
@@ -17,15 +20,17 @@ export class SamplingSim {
     this.rows = rows;
     this.tau = tau;
     this.rng = rng;
+    this.topRow = 0;
     this.lanes = [];
+    this.keepOut = [];
+    this.still = false;
     this.ambGlyph = new Uint8Array(cols * rows);
     this.ambLevel = new Float32Array(cols * rows);
     this.maxLanes = Math.max(6, Math.round((cols * rows) / 110));
     this.ambientPerTick = Math.max(2, Math.round((cols * rows) / 300));
-    this.keepOut = [];
   }
 
-  /** Cell-space rects ({x0, y0, x1, y1}, inclusive) where content sits: no lanes, no ambient. */
+  /** Document-cell rects ({x0, y0, x1, y1}, inclusive) where text sits: no lanes, no ambient. */
   setKeepOut(rects) {
     this.keepOut = rects;
   }
@@ -34,11 +39,37 @@ export class SamplingSim {
     return this.keepOut.some((r) => y >= r.y0 && y <= r.y1 && x <= r.x1 && x + len - 1 >= r.x0);
   }
 
+  /** Move the visible window; ambient glyphs travel with the document. */
+  scrollTo(topRow) {
+    const delta = topRow - this.topRow;
+    if (!delta) return;
+    this.topRow = topRow;
+    const shift = delta * this.cols;
+    if (Math.abs(delta) >= this.rows) {
+      this.ambLevel.fill(0);
+    } else if (delta > 0) {
+      this.ambGlyph.copyWithin(0, shift);
+      this.ambLevel.copyWithin(0, shift);
+      this.ambLevel.fill(0, this.ambLevel.length - shift);
+    } else {
+      this.ambGlyph.copyWithin(-shift, 0, this.ambGlyph.length + shift);
+      this.ambLevel.copyWithin(-shift, 0, this.ambLevel.length + shift);
+      this.ambLevel.fill(0, 0, -shift);
+    }
+    const margin = this.rows;
+    this.lanes = this.lanes.filter((l) => l.y >= topRow - margin && l.y < topRow + this.rows + margin);
+  }
+
+  /** True once a still field has fully settled — the caller can stop stepping. */
+  get settled() {
+    return this.still && this.lanes.every((l) => l.t >= l.holdStart) && this.ambLevel.every((v) => v < 0.015);
+  }
+
   spawnLane() {
     const cand = sample(TOY_GRAMMAR, { tau: this.tau, rng: this.rng });
     const len = cand.chars.length;
     if (len >= this.cols) return;
-    const y = Math.floor(this.rng() * this.rows);
+    const y = this.topRow + Math.floor(this.rng() * this.rows);
     const x = Math.floor(this.rng() * (this.cols - len));
     const clashes = this.lanes.some((l) => l.y === y && x < l.x + l.chars.length + 2 && l.x < x + len + 2);
     if (clashes || this.blocked(x, y, len)) return;
@@ -56,20 +87,23 @@ export class SamplingSim {
   step() {
     const { rng } = this;
     for (let i = 0; i < this.ambLevel.length; i++) this.ambLevel[i] *= 0.86;
-    for (let k = 0; k < this.ambientPerTick; k++) {
-      const i = Math.floor(rng() * this.ambLevel.length);
-      if (this.blocked(i % this.cols, Math.floor(i / this.cols))) continue;
-      this.ambGlyph[i] =glyphIndex(randomOf(AMBIENT_CLASSES[Math.floor(rng() * 4)], rng));
-      this.ambLevel[i] = 0.08 + rng() * 0.1;
+    if (!this.still) {
+      for (let k = 0; k < this.ambientPerTick; k++) {
+        const i = Math.floor(rng() * this.ambLevel.length);
+        if (this.blocked(i % this.cols, this.topRow + Math.floor(i / this.cols))) continue;
+        this.ambGlyph[i] = glyphIndex(randomOf(AMBIENT_CLASSES[Math.floor(rng() * 4)], rng));
+        this.ambLevel[i] = 0.08 + rng() * 0.1;
+      }
+      if (this.lanes.length < this.maxLanes && rng() < 0.6) this.spawnLane();
     }
-    if (this.lanes.length < this.maxLanes && rng() < 0.6) this.spawnLane();
-    for (const lane of this.lanes) lane.t++;
+    // Still: lanes finish locking, then hold where they are instead of dissolving.
+    for (const lane of this.lanes) if (!this.still || lane.t < lane.holdStart) lane.t++;
     this.lanes = this.lanes.filter((l) => l.t < l.dissolveStart + LANE_TICKS.dissolve);
   }
 
   /** Fill an RGBA Uint8Array (cols*rows*4): R glyph, G state, B intensity. */
   write(out) {
-    const { cols, rng } = this;
+    const { cols, rows, rng } = this;
     for (let i = 0; i < this.ambGlyph.length; i++) {
       const o = i * 4;
       out[o] = this.ambLevel[i] > 0.015 ? this.ambGlyph[i] : 0;
@@ -77,9 +111,11 @@ export class SamplingSim {
       out[o + 2] = Math.round(this.ambLevel[i] * 255);
     }
     for (const lane of this.lanes) {
+      const row = lane.y - this.topRow;
+      if (row < 0 || row >= rows) continue;
       const { t } = lane;
       lane.chars.forEach(({ ch, cls }, j) => {
-        const o = (lane.y * cols + lane.x + j) * 4;
+        const o = (row * cols + lane.x + j) * 4;
         const locked = t >= lane.lockStart + j * LANE_TICKS.lockEvery;
         let glyph = locked ? ch : randomOf(cls, rng);
         let state = locked ? STATE.LOCKED : STATE.AMBIENT;

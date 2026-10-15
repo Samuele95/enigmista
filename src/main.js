@@ -1,11 +1,17 @@
 import '@fontsource-variable/bodoni-moda';
+import '@fontsource-variable/bodoni-moda/wght-italic.css';
+import '@fontsource-variable/newsreader';
+import '@fontsource-variable/newsreader/wght-italic.css';
 import '@fontsource/martian-mono/400.css';
 import './styles.css';
 import { scrambleIn } from './scramble-text.js';
+import { mountSandbox } from './sandbox.js';
 
 document.querySelector('[data-build]').textContent = `build ${__BUILD_ID__}`;
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+mountSandbox(document.querySelector('[data-sandbox]'));
 
 document.fonts.ready.then(() => {
   document.querySelectorAll('[data-scramble]').forEach((el, i) => {

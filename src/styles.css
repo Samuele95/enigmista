@@ -1,3 +1,4 @@
+/* CP2 skeleton: structure and readability. The design system proper lands in CP3. */
 :root {
   --void: #07080b;
   --ink: #10131a;
@@ -6,17 +7,41 @@
   --bone: #e9e4d8;
   --ember: #e8a33d;
   --heldout: #3cc6b4;
+  --paper-ink: #1a1c22;
+  --paper-muted: #5c5a55;
 
   --font-display: 'Bodoni Moda Variable', 'Bodoni Moda', Didot, serif;
+  --font-body: 'Newsreader Variable', 'Newsreader', Georgia, serif;
   --font-mono: 'Martian Mono', ui-monospace, monospace;
+
+  --gutter: clamp(16px, 5vw, 64px);
+  --measure: 38rem;
 }
 
-html,
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 4rem;
+}
+
 body {
   margin: 0;
-  min-height: 100%;
   background: var(--void);
   color: var(--bone);
+  font-family: var(--font-body);
+  font-size: clamp(1.0625rem, 0.4vw + 1rem, 1.25rem);
+  line-height: 1.6;
+}
+
+a {
+  color: inherit;
+  text-decoration-color: var(--ember);
+  text-underline-offset: 0.2em;
+}
+
+code,
+pre {
+  font-family: var(--font-mono);
+  font-size: 0.78em;
 }
 
 .field {
@@ -26,14 +51,103 @@ body {
   height: 100%;
 }
 
-.stage {
+.skip {
+  position: absolute;
+  left: -100vw;
+}
+
+.skip:focus {
+  left: var(--gutter);
+  top: 1rem;
+  z-index: 10;
+  background: var(--bone);
+  color: var(--void);
+  padding: 0.5rem 1rem;
+}
+
+/* Labels: the mono technical voice. */
+.label {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.muted {
+  color: var(--ash);
+}
+
+.dot {
+  color: var(--ember);
+}
+
+/* Masthead */
+.masthead {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem var(--gutter);
+  background: linear-gradient(var(--void) 40%, transparent);
+}
+
+.masthead__mark {
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  text-decoration: none;
+}
+
+.masthead__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.masthead__nav a {
+  text-decoration: none;
+  color: var(--ash);
+}
+
+.masthead__nav a:hover,
+.masthead__nav a:focus-visible {
+  color: var(--bone);
+}
+
+@media (max-width: 640px) {
+  .masthead__nav {
+    display: none;
+  }
+}
+
+/* Sections */
+main {
   position: relative;
+}
+
+.hero,
+.section {
+  position: relative;
+  padding: 0 var(--gutter);
+}
+
+.hero {
   min-height: 100svh;
   display: grid;
-  place-content: center;
+  align-content: center;
   justify-items: center;
   gap: 1.25rem;
-  padding: 0 16px;
   text-align: center;
 }
 
@@ -46,19 +160,300 @@ body {
   letter-spacing: -0.01em;
 }
 
-.dot {
+.hero__lede {
+  max-width: 34rem;
+  margin: 0;
+}
+
+.scroll-cue {
+  margin-top: 2rem;
+  color: var(--ash);
+  text-decoration: none;
+}
+
+.section {
+  padding-block: clamp(5rem, 14vh, 10rem);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr); /* lets <pre> scroll instead of widening the page */
+  gap: 1.5rem;
+  justify-items: start;
+  max-width: 72rem;
+  margin-inline: auto;
+}
+
+.section h2 {
+  max-width: 18ch;
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(2.25rem, 5vw, 4.25rem);
+  line-height: 1.05;
+}
+
+.section h3,
+.section h4 {
+  margin: 0;
+}
+
+.subhead {
+  margin-top: 2rem;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.75rem;
+}
+
+.prose {
+  max-width: var(--measure);
+}
+
+.prose p {
+  margin: 0 0 1em;
+}
+
+.note {
+  max-width: var(--measure);
+  margin: 0;
+  color: var(--ash);
+  font-size: 0.9em;
+}
+
+/* §02 */
+.layers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 2rem;
+  margin: 0;
+}
+
+.layers dt {
+  display: grid;
+  gap: 0.25rem;
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+}
+
+.layers dt .label {
   color: var(--ember);
 }
 
-.label {
+.layers dd {
+  margin: 0.5rem 0 0;
+  max-width: 30rem;
+}
+
+.uses,
+.loop,
+.steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 2rem;
+  width: 100%;
   margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.uses h4 {
+  margin: 0.5rem 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.375rem;
+}
+
+.uses p,
+.loop p,
+.steps p {
+  margin: 0;
+}
+
+.slot,
+.loop .label,
+.steps .label {
+  color: var(--ember);
+  margin-bottom: 0.5rem;
+}
+
+/* §03 */
+.loop li {
+  border-top: 1px solid var(--rule);
+  padding-top: 1rem;
+}
+
+.schema {
+  margin: 0;
+  width: 100%;
+}
+
+.schema pre,
+.steps pre {
+  margin: 0 0 0.75rem;
+  padding: 1rem;
+  overflow-x: auto;
+  background: var(--ink);
+  border: 1px solid var(--rule);
+}
+
+.schema figcaption {
+  margin-top: 0.5rem;
+  color: var(--ash);
+}
+
+.pull {
+  max-width: 32rem;
+  margin: 1rem 0 0;
+  padding-left: 1.5rem;
+  border-left: 1px solid var(--ember);
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  line-height: 1.35;
+}
+
+.pull p {
+  margin: 0;
+}
+
+/* §04 sandbox */
+.tag {
+  margin-left: 0.75rem;
+  padding: 0.2em 0.6em;
+  border: 1px solid var(--ember);
+  color: var(--ember);
+}
+
+.sandbox {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 1px;
+  width: 100%;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+}
+
+.sandbox__panel {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: var(--ink);
+}
+
+.sandbox__panel .label {
+  color: var(--ash);
+}
+
+.tokens,
+.templates,
+.candidates {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.8;
+}
+
+.tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1rem;
+}
+
+.tokens--heldout {
+  color: var(--heldout);
+}
+
+.templates li {
+  white-space: pre;
+}
+
+.templates__terminals {
+  white-space: normal !important;
+  color: var(--ash);
+}
+
+.enriched {
+  color: var(--ember);
+}
+
+.candidates .is-hit {
+  color: var(--heldout);
+}
+
+.btn {
+  justify-self: start;
+  padding: 0.6rem 1rem;
+  background: transparent;
+  color: var(--bone);
+  border: 1px solid var(--ember);
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
 }
 
-.muted,
-.build {
-  color: var(--ash);
+.btn:hover,
+.btn:focus-visible {
+  background: var(--ember);
+  color: var(--void);
+}
+
+/* §05 the one paper section */
+.section--paper {
+  max-width: none;
+  background: var(--bone);
+  color: var(--paper-ink);
+  padding-inline: max(var(--gutter), calc((100vw - 72rem) / 2 + var(--gutter)));
+}
+
+.section--paper .label {
+  color: var(--paper-muted);
+}
+
+.section--paper code {
+  color: var(--paper-ink);
+}
+
+.scope {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 2rem 4rem;
+  width: 100%;
+  max-width: 60rem;
+}
+
+.scope h3 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.625rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid currentColor;
+}
+
+.scope ul {
+  margin: 1rem 0 0;
+  padding-left: 1.1em;
+}
+
+.scope li + li {
+  margin-top: 0.5rem;
+}
+
+/* §06 */
+.pending {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  color: var(--ember);
+}
+
+.colophon {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 3rem var(--gutter);
+  border-top: 1px solid var(--rule);
 }

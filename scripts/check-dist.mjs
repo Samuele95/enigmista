@@ -35,6 +35,14 @@ for (const file of textFiles) {
     }
   }
   if (/["'`]\/assets\//.test(body)) problems.push(`${relative(DIST, file)}: bare "/assets/" path found`);
+
+  // Demo contract (CLAUDE.md §3): the site never offers a place to type a password or corpus.
+  // Non-text controls (range, checkbox, radio, button) are fine; anything that accepts text is not.
+  const textEntry = [
+    ...body.matchAll(/<input\b(?![^>]*type=["']?(range|checkbox|radio|button|submit|reset)\b)[^>]*>/gi),
+    ...body.matchAll(/<textarea\b|contenteditable|createElement\(\s*["'](input|textarea)["']/gi),
+  ];
+  for (const m of textEntry) problems.push(`${relative(DIST, file)}: text-entry control found (${m[0].slice(0, 40)}) — violates the demo contract`);
 }
 
 if (problems.length) {

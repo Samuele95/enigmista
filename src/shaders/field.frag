@@ -7,6 +7,7 @@ uniform vec2 uResolution;   // drawing-buffer px
 uniform sampler2D uCells;   // cols x rows, RGBA8: glyph, state, intensity
 uniform vec2 uGrid;         // cols, rows
 uniform vec2 uCellPx;       // cell size in drawing-buffer px
+uniform float uScrollPx;    // sub-row scroll offset, drawing-buffer px
 uniform sampler2D uAtlas;
 uniform vec2 uAtlasGrid;    // atlas cols, rows
 
@@ -38,8 +39,8 @@ void main() {
   col += EMBER * 0.06 * smoothstep(0.45, 0.9, n) * vignette;
   col += HELDOUT * 0.03 * smoothstep(0.55, 1.0, 1.0 - n) * vignette;
 
-  // Glyph grid, top-left origin to match the CPU sim.
-  vec2 frag = vec2(gl_FragCoord.x, uResolution.y - gl_FragCoord.y);
+  // Glyph grid, top-left origin to match the CPU sim; shifted so it scrolls with the page.
+  vec2 frag = vec2(gl_FragCoord.x, uResolution.y - gl_FragCoord.y + uScrollPx);
   vec2 cell = floor(frag / uCellPx);
   vec2 local = fract(frag / uCellPx);
   vec4 data = texture2D(uCells, (cell + 0.5) / uGrid);
