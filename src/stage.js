@@ -25,6 +25,28 @@ const inOut = (t) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2);
 const clamp01 = (t) => Math.min(1, Math.max(0, t));
 const pad2 = (n) => String(n).padStart(2, '0');
 
+// Terminal lines type themselves out; screen readers get the full text at once.
+function typeOut(el) {
+  const text = el.dataset.full ?? (el.dataset.full = el.textContent);
+  let shown = el.querySelector('[data-typed]');
+  if (!shown) {
+    const real = document.createElement('span');
+    real.className = 'sr-only';
+    real.textContent = text;
+    shown = document.createElement('span');
+    shown.dataset.typed = '';
+    shown.setAttribute('aria-hidden', 'true');
+    el.replaceChildren(real, shown);
+  }
+  const start = performance.now() + 400;
+  const tick = (now) => {
+    const n = Math.max(0, Math.floor((now - start) / 14));
+    shown.textContent = text.slice(0, n) + (n < text.length ? '▌' : '');
+    if (n < text.length) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
 export function startStage({ field, world } = {}) {
   const scenes = [...document.querySelectorAll('[data-scene]')].map((el) => {
     // Each shot's content sits in a window bounded by the HUD bars; tall content steps inside it.
@@ -33,14 +55,13 @@ export function startStage({ field, world } = {}) {
     win.className = 'scene__window';
     body.replaceWith(win);
     win.append(body);
+    const beatEls = [...body.querySelectorAll(':scope > .beat')];
     return {
-      el, body, win,
-      parts: [...body.children],
+      el, body, win, beatEls,
       title: el.dataset.title,
-      designed: Number(el.dataset.length),
-      stations: el.querySelectorAll('[data-inspect-track] > li').length,
+      designed: Math.max(1.3, beatEls.length * 0.9 + 0.4), // timeline length grows with the beats
       still: el.dataset.field === 'still',
-      shown: false,
+      current: -1,
     };
   });
 
@@ -52,23 +73,19 @@ export function startStage({ field, world } = {}) {
   const layoutTimeline = () => {
     let cursor = -ENTER;
     for (const s of scenes) {
-      s.overflow = Math.max(0, s.body.offsetHeight - s.win.clientHeight); // cached: render() never reads layout
-      s.length = Math.max(s.designed, s.overflow / vh() + 2 * ENTER + 0.5);
+      s.length = s.designed;
       s.start = cursor;
       s.end = cursor + s.length;
       cursor = s.end;
     }
     pMax = cursor - ENTER;
+    // One beat per caption block, spread evenly over the chapter's resting range.
     beats = scenes.flatMap((s, i) => {
       const [a, b] = rest(s);
-      // Method: one beat per station. Tall shots: one beat per ~0.6 screen of content.
-      const n = s.stations > 1 ? s.stations - 1 : s.overflow > 0 ? Math.ceil(s.overflow / (vh() * 0.6)) : 0;
+      const n = Math.max(0, s.beatEls.length - 1);
       return Array.from({ length: n + 1 }, (_, k) => ({ p: n ? a + ((b - a) * k) / n : a, scene: i }));
     });
-    const inspect = document.querySelector('[data-inspect-track]');
-    inspectMax = inspect ? Math.max(0, inspect.scrollWidth - inspect.parentElement.clientWidth) : 0;
   };
-  let inspectMax = 0;
   layoutTimeline();
   // Re-time when content changes size (the sandbox fills in as it runs) or the window resizes,
   // keeping the visitor on the same beat of the same chapter.
@@ -92,12 +109,19 @@ export function startStage({ field, world } = {}) {
 
   // ── HUD ─────────────────────────────────────────────────────────────
   const rail = document.querySelector('[data-rail]');
+  const hint = document.querySelector('[data-vis-hint]');
   rail.append(
     ...scenes.map((s, i) => {
       const li = document.createElement('li');
       const a = document.createElement('a');
       a.href = `#${s.el.id}`;
-      a.textContent = `${pad2(i + 1)} ${s.title}`;
+      a.setAttribute('aria-label', `${pad2(i + 1)} ${s.title}`);
+      const num = document.createElement('span');
+      num.textContent = pad2(i + 1);
+      const title = document.createElement('span');
+      title.className = 'hud__rail-title';
+      title.textContent = s.title;
+      a.append(num, title);
       a.addEventListener('click', (e) => {
         e.preventDefault();
         goTo(i);
@@ -109,8 +133,6 @@ export function startStage({ field, world } = {}) {
   const hudChapter = document.querySelector('[data-hud-chapter]');
   const count = document.querySelector('[data-count]');
   const bar = document.querySelector('[data-bar]');
-  const station = document.querySelector('[data-station]');
-  const inspectTrack = document.querySelector('[data-inspect-track]');
 
   // ── Playhead: beats are timed, eased moves ──────────────────────────
   const playhead = { p: 0, from: 0, to: 0, t0: 0, dur: 0, moving: false };
@@ -219,9 +241,32 @@ export function startStage({ field, world } = {}) {
     count.textContent = `${pad2(i + 1)} / ${pad2(scenes.length)}`;
     window.dispatchEvent(new CustomEvent('stage:scene', { detail: scenes[i].el.id }));
     document.documentElement.dataset.tone = scenes[i].still ? 'paper' : 'dark';
+    document.documentElement.dataset.chapter = scenes[i].el.id; // some layouts re-split the frame per chapter
     field?.refreshKeepOut();
     clearTimeout(remeasure);
     remeasure = setTimeout(() => field?.refreshKeepOut(), 1300); // after the headline deciphers
+  };
+
+  // A beat becomes current: its caption fades in, its headline deciphers, its terminal types.
+  const showBeat = (s, k) => {
+    if (s.current === k) return;
+    s.current = k;
+    s.beatEls.forEach((el, j) => el.classList.toggle('is-current', j === k));
+    const el = s.beatEls[k];
+    if (!el) return;
+    el.querySelectorAll('[data-scramble]').forEach((t, n) =>
+      scrambleIn(t, { delay: 250 + n * 120, duration: t.matches('h1 *') ? 1900 : 900 }),
+    );
+    el.querySelectorAll('[data-type]').forEach((t) => typeOut(t));
+    // What the visual responds to on this beat, spelled out under it.
+    if (hint) {
+      hint.classList.toggle('is-on', !!el.dataset.hint);
+      if (el.dataset.hint) {
+        hint.textContent = el.dataset.hint;
+        scrambleIn(hint, { delay: 900, duration: 700 });
+      }
+    }
+    window.dispatchEvent(new CustomEvent('stage:beat', { detail: { scene: s.el.id, beat: k } }));
   };
 
   const render = () => {
@@ -242,42 +287,18 @@ export function startStage({ field, world } = {}) {
       }
       const entering = p < (s.start + s.end) / 2;
       const e = ease(vis);
-      s.el.style.opacity = vis > 0 ? 1 : 0;
+      s.el.style.opacity = vis > 0 ? e : 0;
       s.el.style.visibility = vis > 0 ? 'visible' : 'hidden';
       s.el.style.setProperty('--shift', `${(1 - e) * (entering ? 3 : -3)}vh`);
       if (s.still) s.el.style.setProperty('--paper', e);
-      // Staggered entrance: eyebrow, then headline, then the rest, each rising into place.
-      const span = Math.min(0.55, (s.parts.length - 1) * 0.07);
-      s.parts.forEach((part, k) => {
-        const ck = ease(clamp01((vis - (entering ? k : s.parts.length - 1 - k) * 0.07) / (1 - span)));
-        part.style.opacity = ck;
-        part.style.transform = ck < 1 ? `translateY(${(1 - ck) * (entering ? 26 : -16)}px)` : '';
-      });
-      // Tall shots step their own body between beats.
       const [r0, r1] = rest(s);
-      const t = r1 > r0 ? clamp01((p - r0) / (r1 - r0)) : 0;
-      s.local = t;
-      s.body.style.transform = s.overflow ? `translateY(${-t * s.overflow}px)` : '';
-      if (vis > 0.55 && !s.shown) {
-        s.shown = true;
-        s.el.querySelectorAll('[data-scramble]').forEach((el, k) =>
-          scrambleIn(el, { delay: k * 120, duration: el.matches('h1 *') ? 1900 : 900 }),
-        );
-      } else if (vis === 0) {
-        s.shown = false;
-      }
+      s.local = r1 > r0 ? clamp01((p - r0) / (r1 - r0)) : 0;
+      // The caption on screen: the nearest beat while resting, none mid-flight between chapters.
+      if (vis > 0.6) showBeat(s, Math.round(s.local * Math.max(0, s.beatEls.length - 1)));
+      else if (vis === 0) showBeat(s, -1);
     });
     setActive(best);
 
-    // Method on narrow screens: the station cards slide across with the beats.
-    const method = scenes.find((s) => s.stations > 1);
-    if (inspectTrack && method) {
-      inspectTrack.style.transform = document.documentElement.classList.contains('is-bound')
-        ? ''
-        : `translateX(${-method.local * inspectMax}px)`;
-      const n = method.stations;
-      station.textContent = `Station ${pad2(1 + Math.round(method.local * (n - 1)))} / ${pad2(n)}`;
-    }
 
     // The world's camera: whole numbers at rest on a shot, fractions while travelling between.
     let chapter = scenes.length - 1;
@@ -296,6 +317,7 @@ export function startStage({ field, world } = {}) {
       break;
     }
     motion.transit = Math.sin(Math.PI * (chapter % 1));
+    motion.beats = scenes.map((s) => s.beatEls.length);
     world?.setChapter(chapter, local, motion);
 
     bar.style.transform = `scaleX(${clamp01(p / pMax)})`;

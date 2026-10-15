@@ -1,7 +1,8 @@
 // End-to-end site check in real headless Chrome (CP8). Deterministic, so it can be re-run.
 //   node scripts/check-site.mjs [url]      (default: the live Pages URL)
-// 1. Stage sweep at 8 viewports: console errors, failed requests, horizontal overflow, and — per
-//    scene — text overlapping the Rotor's anchor (wide layouts) or escaping the viewport.
+// 1. Stage sweep at 8 viewports, every caption beat: console errors, failed requests, horizontal
+//    overflow, exactly one caption visible, captions inside the area between the HUD bars and
+//    clear of the visual frame (the 3D and the sandbox's induction live only there).
 // 2. Reduced motion (emulated prefers-reduced-motion): calm layout, no boot, no WebGL world, the
 //    sandbox shown in its final state, and the page goes quiet (no animation-frame loop).
 // 3. Demo contract at runtime: no text-entry control anywhere.
@@ -47,58 +48,52 @@ for (const vp of VIEWPORTS) {
   const tag = `${vp[0]}×${vp[1]}`;
   const { page, errors, failed } = await open(vp);
   try {
-    await page.waitForFunction(() => !document.querySelector('[data-boot]') && window.__stage && window.__field?.world(), {
-      timeout: 20000,
+    // Ready = booted and the hero reveal (dolly-in, captions arriving) has finished.
+    await page.waitForFunction(() => document.documentElement.classList.contains('is-revealed') && window.__stage && window.__field?.world(), {
+      timeout: 30000,
     });
   } catch {
     note(`${tag}: stage never became ready (boot still present or world missing)`);
     await page.close();
     continue;
   }
+  const beats = await page.evaluate(() => window.__stage.beats().map((b) => b.scene));
   const ids = await page.evaluate(() => [...document.querySelectorAll('[data-scene]')].map((s) => s.id));
-  for (let i = 0; i < ids.length; i++) {
-    await page.evaluate((i) => window.__stage.jump(i), i);
-    await sleep(350);
+  for (let k = 0; k < beats.length; k++) {
+    await page.evaluate((k) => window.__stage.beat(k), k);
+    await sleep(1300); // the caption's fade-in
     const r = await page.evaluate(() => {
-      window.__field.frames(12);
+      window.__field.frames(4);
+      document.getAnimations().forEach((a) => a.finish()); // settle caption fades deterministically
       const vw = document.documentElement.clientWidth;
+      const vh = window.innerHeight;
       const scene = document.querySelector('.scene.is-active');
-      const anchor = scene.querySelector(':scope > .rotor-anchor');
-      const a = anchor && getComputedStyle(anchor).display !== 'none' ? anchor.getBoundingClientRect() : null;
-      const wide = window.innerWidth >= 1000;
-      // Text bound to the Rotor (Uses tips, Method stations) sits on its area by design.
-      const bound = document.documentElement.classList.contains('is-bound');
-      const texts = [...scene.querySelectorAll('.scene__body :is(h1, h2, h3, p, li, dt, dd, pre, .btn)')]
-        .filter((el) => !(bound && el.closest('.uses, .inspect')))
-        .map((el) => ({ el, r: el.getBoundingClientRect() }))
-        .filter(({ r }) => r.width && r.height && r.bottom > 0 && r.top < window.innerHeight);
-      const overlap = a && wide
-        ? texts.filter(({ r }) => Math.min(r.right, a.right) - Math.max(r.left, a.left) > 2 && Math.min(r.bottom, a.bottom) - Math.max(r.top, a.top) > 2)
-            .map(({ el }) => el.tagName + ':' + el.textContent.trim().slice(0, 30))
-        : [];
-      const escaping = texts
-        .filter(({ el, r }) => (r.right > vw + 1 || r.left < -1) && !el.closest('.inspect, pre'))
-        .map(({ el }) => el.tagName + ':' + el.textContent.trim().slice(0, 30));
-      // Bound blocks (Uses tips, the current Method station): clear of the headline and each other.
-      const boundBlocks = bound
-        ? [...scene.querySelectorAll('.uses > li, .inspect__track > li.is-current')]
-            .map((el) => el.getBoundingClientRect())
-            .filter((r) => r.width)
-        : [];
-      const heads = [...scene.querySelectorAll('.scene__body > :is(.eyebrow, h2, .lede, .eyebrow-row)')]
-        .map((el) => el.getBoundingClientRect())
-        .filter((r) => r.width);
+      const current = [...scene.querySelectorAll('.beat')].filter((b) => getComputedStyle(b).visibility === 'visible' && +getComputedStyle(b).opacity > 0.5);
+      const box = (el) => el.getBoundingClientRect();
       const hit = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 2 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 2;
-      const boundClash = boundBlocks.some((r, i) => heads.some((h) => hit(r, h)) || boundBlocks.some((q, j) => j > i && hit(r, q)));
-      const boundOff = boundBlocks.some((r) => r.left < 0 || r.right > vw || r.top < 0 || r.bottom > window.innerHeight);
-      return { id: scene.id, overflow: document.documentElement.scrollWidth > vw, overlap, escaping, boundClash, boundOff };
+      const texts = current
+        .flatMap((b) => [...b.querySelectorAll('h1, h2, p, pre, .btn, .tau')])
+        .filter((el) => el.offsetParent && box(el).width && box(el).height);
+      const top = box(document.querySelector('.hud__top')).bottom;
+      const bottom = box(document.querySelector('.hud__bottom')).top;
+      const frame = box(document.querySelector('[data-visual-frame]'));
+      const paper = scene.classList.contains('scene--paper');
+      const label = (el) => el.tagName + ':' + el.textContent.trim().slice(0, 30);
+      return {
+        id: scene.id,
+        shown: current.length,
+        overflow: document.documentElement.scrollWidth > vw,
+        escaping: texts.filter((el) => box(el).right > vw + 1 || box(el).left < -1 || box(el).top < top - 1 || box(el).bottom > bottom + 1).map(label),
+        // Text never runs under the visual: captions keep to their column, visuals to their frame.
+        onVisual: paper ? [] : texts.filter((el) => hit(box(el), frame)).map(label),
+      };
     });
-    if (r.id !== ids[i]) note(`${tag}: jump(${i}) landed on ${r.id}, expected ${ids[i]}`);
-    if (r.overflow) note(`${tag} ${r.id}: horizontal page overflow`);
-    if (r.overlap.length) note(`${tag} ${r.id}: text overlaps the Rotor anchor → ${r.overlap.slice(0, 3).join(' | ')}`);
-    if (r.escaping.length) note(`${tag} ${r.id}: text escapes the viewport → ${r.escaping.slice(0, 3).join(' | ')}`);
-    if (r.boundClash) note(`${tag} ${r.id}: bound text overlaps the headline or another bound block`);
-    if (r.boundOff) note(`${tag} ${r.id}: bound text is off-screen`);
+    const where = `${tag} ${r.id} beat ${k}`;
+    if (r.id !== ids[beats[k]]) note(`${where}: landed on ${r.id}, expected ${ids[beats[k]]}`);
+    if (r.shown !== 1) note(`${where}: ${r.shown} caption beats visible (expected 1)`);
+    if (r.overflow) note(`${where}: horizontal page overflow`);
+    if (r.escaping.length) note(`${where}: text outside the caption area → ${r.escaping.slice(0, 3).join(' | ')}`);
+    if (r.onVisual.length) note(`${where}: text over the visual frame → ${r.onVisual.slice(0, 3).join(' | ')}`);
   }
   // Movie mode: no native scroll, and one trackpad flick (a burst of wheel events) = one beat.
   const movie = await page.evaluate(async () => {
@@ -122,7 +117,7 @@ for (const vp of VIEWPORTS) {
   if (entry) note(`${tag}: ${entry} text-entry control(s) present — demo contract`);
   if (errors.length) note(`${tag}: console/page errors → ${[...new Set(errors)].slice(0, 3).join(' | ')}`);
   if (failed.length) note(`${tag}: failed requests → ${failed.slice(0, 3).join(' | ')}`);
-  console.log(`stage ${tag}: checked ${ids.length} scenes`);
+  console.log(`stage ${tag}: checked ${beats.length} beats`);
   await page.close();
 }
 

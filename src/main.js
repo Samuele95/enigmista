@@ -27,29 +27,15 @@ document.querySelectorAll('[data-mode-toggle]').forEach((b) =>
   }),
 );
 
-// On the stage the induction plays the first time its panels are actually on screen in the sandbox
-// shot (on short screens they sit below the headline until the visitor scrolls); calm shows the
-// final state at once.
-const sandboxReady = Promise.resolve().then(() => {
-  const root = document.querySelector('[data-sandbox]');
-  const sandbox = mountSandbox(root, { instant: !staged || reducedMotion });
-  // A direct geometric check (not an IntersectionObserver, whose callbacks wait on the browser's
-  // rendering cadence): enough of the panels on screen while the sandbox is the active shot.
-  let here = false;
-  const maybePlay = () => {
-    if (!here || sandbox.played()) return;
-    const r = root.getBoundingClientRect();
-    const visible = Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0);
-    if (visible > Math.min(r.height * 0.45, window.innerHeight * 0.4)) sandbox.play();
-  };
-  window.addEventListener('stage:scene', (e) => {
-    here = e.detail === 'sandbox';
-    setTimeout(maybePlay);
-  });
-  window.addEventListener('scroll', () => setTimeout(maybePlay), { passive: true }); // calm document
-  window.addEventListener('stage:moved', maybePlay); // stage: after each beat
-  window.addEventListener('resize', maybePlay);
-  return sandbox;
+// The sandbox: on the stage, a full-frame animation driven by its caption beats; in the calm
+// document, readable panels showing the finished induction.
+const sandboxReady = Promise.resolve().then(async () => {
+  if (staged) {
+    const { mountInduceViz } = await import('./induce-viz.js');
+    const scene = document.querySelector('#sandbox');
+    return mountInduceViz(scene.querySelector('[data-induce-viz]'), scene);
+  }
+  return mountSandbox(document.querySelector('[data-sandbox]'), { instant: true });
 });
 const fontsReady = document.fonts.ready;
 const fieldModule = import('./field.js');

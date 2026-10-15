@@ -3,19 +3,23 @@
 // toy candidate (teal when it lands on the toy held-out set).
 //
 // It is woven into the page, not parked beside it:
-//  · position — every scene carries a [data-rotor-anchor] (the hero a [data-rotor-slot]); CSS
-//    places it per breakpoint and the camera fits the rotor into it.
+//  · framing — every caption beat has a shot (SHOTS): the drum fills the frame clear of the
+//    caption zone; the camera eases between a chapter's shots and flies between chapters.
 //  · motion   — a dolly-in reveal that locks E-N-I-G-M-I-S-T-A with the wordmark; discs scramble
 //    while the camera travels between shots and click back on arrival; the drum rolls with scroll.
 //  · content  — structure groups the discs by the live candidate's grammar slots (labelled);
-//    uses grows ⟨audit⟩ ⟨decoy⟩ ⟨synth⟩ branches that light with their cards; objective keeps a
-//    live toy readout; method performs each station; the sandbox plays its draws on the drum.
+//    uses grows ⟨audit⟩ ⟨decoy⟩ ⟨synth⟩ branches that light with their captions; objective dives
+//    below the drum to the distribution itself (src/disc.js), where visitors throw darts and turn τ;
+//    method performs each station; the sandbox plays its draws on the drum.
+//  · frame    — every shot is fitted into the visual frame CSS reserves (.visual-frame), so the 3D
+//    never runs under the caption column.
 import {
   AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, CatmullRomCurve3, Color, CylinderGeometry,
   Group, InstancedBufferAttribute, InstancedBufferGeometry, LinearSRGBColorSpace, Matrix4, Mesh,
   MeshBasicMaterial, PerspectiveCamera, PlaneGeometry, Points, Raycaster, Scene, ShaderMaterial, SphereGeometry,
   TorusGeometry, TubeGeometry, Vector2, Vector3,
 } from 'three';
+import { DISC_R, createDisc } from './disc.js';
 import { glyphIndex } from './glyphs.js';
 import { sample } from './sampler.js';
 import { SLOT_LABELS, TOY_GRAMMAR, TOY_HELDOUT } from './toy/grammar.js';
@@ -36,8 +40,7 @@ const FOV = 30;
 const BOOKEND = 'enigmista';
 const STATIONS = ['corpus', 'induce', 'sample', 'score', 'refine', 'stop'];
 const CHAPTER_WORD = { hero: BOOKEND, structure: 'structure', uses: 'uses', objective: 'objective', method: 'method', sandbox: 'sandbox', install: BOOKEND };
-const SPIKE_MAX = 0.9; // world units of spike length at p = 1 (scaled by √p so small odds stay visible)
-const KERNEL_SAMPLES = 3000;
+const DISC_Y = -6; // the distribution lies below the drum; the camera dives to it
 
 // Palette as raw display values: the whole pipeline stays in these numbers (no colour-space
 // conversion), so a hex here is the hex on screen — same as the CSS tokens.
@@ -48,19 +51,53 @@ const C = {
   bone: raw(0xe9e4d8), ember: raw(0xe8a33d), heldout: raw(0x3cc6b4),
 };
 
-// Per-chapter poses. Placement (sx/sy/dist) comes from the scene's anchor; these say how the
-// rotor is seen and which set piece is up. slots/uses/readout/station: label groups.
-const POSES = {
-  hero: { az: -0.22, el: 0.12, explode: 0, dim: 1, ghost: 0, branch: 0, loop: 0, aura: 1, lookY: 0, slots: 0, uses: 0, readout: 0, station: 0, kernel: 0.55 },
-  structure: { az: -0.55, el: 0.2, explode: 1, dim: 1, ghost: 0, branch: 0, loop: 0, aura: 0.6, lookY: 0.2, slots: 1, uses: 0, readout: 0, station: 0, kernel: 0.35 },
-  uses: { az: 0.4, el: 0.32, explode: 0, dim: 0.9, ghost: 0, branch: 1, loop: 0, aura: 0.5, lookY: 1.0, slots: 0, uses: 1, readout: 0, station: 0, kernel: 0.2 },
-  objective: { az: -0.6, el: 0.12, explode: 0, dim: 1, ghost: 1, branch: 0, loop: 0, aura: 0.7, lookY: -0.15, slots: 0, uses: 0, readout: 1, station: 0, kernel: 1 },
-  method: { az: -0.3, el: 0.16, explode: 0, dim: 0.95, ghost: 0.35, branch: 0, loop: 1, aura: 0.5, lookY: 0, slots: 0, uses: 0, readout: 0, station: 1, kernel: 0.8 },
-  sandbox: { az: -0.45, el: 0.12, explode: 0, dim: 0.95, ghost: 0, branch: 0, loop: 0, aura: 0.6, lookY: 0, slots: 0, uses: 0, readout: 0, station: 0, kernel: 1 },
-  scope: { az: 1.4, el: 0.2, explode: 0, dim: 0.2, ghost: 0, branch: 0, loop: 0, aura: 0, lookY: 0, slots: 0, uses: 0, readout: 0, station: 0, kernel: 0 },
-  install: { az: 0.15, el: 0.14, explode: 0, dim: 1, ghost: 0, branch: 0, loop: 0, aura: 1, lookY: 0, slots: 0, uses: 0, readout: 0, station: 0, kernel: 0.55 },
+// Shots: one per caption beat, eased between inside a chapter and flown between across chapters.
+// box: where the subject sits inside the visual frame — [centre x, centre y, width, height] as
+// fractions of the frame (nbox: the same on phones, where the frame is the top band).
+// look/zoom: frame a point other than the drum (the Uses branch tips). disc: the distribution.
+// Label groups: slots, uses, readout, station. breathe: τ animates on its own.
+const BASE = {
+  az: -0.25, el: 0.12, explode: 0, dim: 1, ghost: 0, branch: 0, loop: 0, aura: 0.8, disc: 0,
+  slots: 0, uses: 0, readout: 0, station: 0, breathe: 0, lookX: 0, lookY: 0, lookZ: 0, zoom: 1,
+  box: [0.5, 0.5, 1, 0.86], nbox: null,
 };
-const KEYS = [...Object.keys(POSES.hero), 'dist', 'sx', 'sy'];
+const shot = (o = {}) => ({ ...BASE, ...o });
+const station = (o) => shot({ az: -0.3, el: 0.16, loop: 1, ghost: 0.35, station: 1, box: [0.5, 0.5, 1, 0.92], ...o });
+const discShot = (o) => shot({ az: -0.22, el: 0.9, dim: 0, aura: 0, disc: 1, lookY: DISC_Y + 0.35, box: [0.5, 0.5, 1, 0.94], ...o });
+const SHOTS = {
+  hero: [shot({ az: -0.22, el: 0.1, aura: 1, box: [0.5, 0.5, 1, 0.8] })],
+  structure: [
+    shot({ az: -0.55, el: 0.22, explode: 1, slots: 1 }),
+    shot({ az: -0.9, el: 0.3, explode: 0.8, slots: 1, zoom: 0.9 }), // neural: the slots, named
+    shot({ az: -0.15, el: 0.1 }), // symbolic: the sampler spins
+  ],
+  uses: [
+    shot({ az: 0.4, el: 0.32, branch: 1, uses: 1, lookY: 1, box: [0.5, 0.52, 1, 0.92] }),
+    shot({ az: -0.2, el: 0.3, branch: 1, uses: 1, lookX: -1.6, lookY: 1.9, lookZ: -0.5, zoom: 0.8 }),
+    shot({ az: 0.15, el: 0.42, branch: 1, uses: 1, lookX: 0.15, lookY: 2.2, lookZ: -0.7, zoom: 0.8 }),
+    shot({ az: 0.55, el: 0.3, branch: 1, uses: 1, lookX: 1.8, lookY: 1.7, lookZ: -0.4, zoom: 0.8 }),
+  ],
+  objective: [
+    shot({ az: -0.3, el: 0.1, ghost: 1, readout: 1, box: [0.5, 0.5, 1, 0.94] }),
+    discShot({}), // the kernel, in geometry
+    discShot({ az: 0.35, el: 0.78, breathe: 1 }), // temperature
+  ],
+  method: [
+    station({ station: 0 }),
+    station({}), station({ explode: 0.65, az: -0.6 }), station({}),
+    station({ ghost: 1 }), station({ az: -0.1 }), station({}),
+  ],
+  sandbox: [
+    ...Array.from({ length: 5 }, () => shot({ az: -0.4, dim: 0, aura: 0 })), // the induction owns the frame
+    shot({ az: -0.45, el: 0.12, aura: 0.9, box: [0.33, 0.5, 0.64, 0.7], nbox: [0.27, 0.45, 0.54, 0.8] }), // sample
+  ],
+  scope: Array.from({ length: 5 }, () => shot({ az: 1.4, dim: 0.2, aura: 0 })),
+  install: [
+    shot({ az: 0.15, el: 0.14, aura: 1 }),
+    ...Array.from({ length: 3 }, () => shot({ az: 0.4, el: 0.18, dim: 0.85 })),
+  ],
+};
+const NUM_KEYS = Object.keys(BASE).filter((k) => k !== 'box' && k !== 'nbox');
 
 const glsl = (x) => (Number.isInteger(x) ? `${x}.0` : `${x}`); // numbers as GLSL float literals
 const smooth = (t) => t * t * (3 - 2 * t);
@@ -68,7 +105,6 @@ const clamp01 = (t) => Math.min(1, Math.max(0, t));
 const wrap = (a) => ((((a + Math.PI) % TAU) + TAU) % TAU) - Math.PI;
 const easeOutBack = (t, s = 0.9) => 1 + (s + 1) * (t - 1) ** 3 + s * (t - 1) ** 2;
 const easeOutExpo = (t) => (t >= 1 ? 1 : 1 - 2 ** (-10 * t));
-const wrapUnit = (x) => ((((x + 0.5) % 1) + 1) % 1) - 0.5;
 
 /* ── Shaders ─────────────────────────────────────────────────────────── */
 
@@ -235,82 +271,6 @@ const auraFrag = /* glsl */ `
   void main() {
     vec2 d = (vUv - 0.5) * vec2(1.0, 1.6);
     gl_FragColor = vec4(uColor, exp(-dot(d, d) * 9.0) * uOpacity);
-  }
-`;
-
-// Kernel spikes: one per disc slot, radial, length ∝ √p(glyph | position); turn with their disc.
-const spikeVert = /* glsl */ `
-  attribute float aRing;
-  attribute float aSlot;
-  attribute float aP;
-  uniform float uRingAngle[${RINGS}];
-  uniform float uRingX[${RINGS}];
-  uniform float uKernel;
-  varying float vP;
-  varying float vFront;
-  varying float vFacing;
-  void main() {
-    int r = int(aRing + 0.5);
-    float a = aSlot / ${glsl(SLOTS)} * 6.2831853 + uRingAngle[r];
-    vec3 n = vec3(0.0, sin(a), cos(a));
-    vec3 t = vec3(0.0, cos(a), -sin(a));
-    float len = sqrt(aP) * ${glsl(SPIKE_MAX)} * uKernel;
-    vec3 p = vec3(uRingX[r] + position.x, 0.0, 0.0) + n * (${glsl(CAP_R + 0.03)} + position.y * len) + t * position.z;
-    vec4 mv = modelViewMatrix * vec4(p, 1.0);
-    vFacing = dot(normalize(normalMatrix * n), normalize(-mv.xyz));
-    float w = mod(a + 3.14159265, 6.2831853) - 3.14159265;
-    vFront = 1.0 - smoothstep(0.5, 1.5, abs(w) / (6.2831853 / ${glsl(SLOTS)}));
-    vP = aP;
-    gl_Position = projectionMatrix * (aP > 0.0005 ? mv : vec4(0.0, 0.0, -2.0, 1.0));
-  }
-`;
-
-const spikeFrag = /* glsl */ `
-  uniform vec3 uEmber;
-  uniform vec3 uBone;
-  uniform float uKernel;
-  uniform float uDim;
-  varying float vP;
-  varying float vFront;
-  varying float vFacing;
-  void main() {
-    float glow = 0.35 + 1.6 * sqrt(vP);
-    vec3 col = mix(uEmber, uBone, vFront * 0.6);
-    gl_FragColor = vec4(col * glow, uKernel * uDim * smoothstep(-0.2, 0.4, vFacing) * (0.5 + vFront * 0.8));
-  }
-`;
-
-// Template wheel on the left cap: sectors ∝ p(template)^(1/τ), a needle on the template just drawn.
-const wheelFrag = /* glsl */ `
-  uniform float uEdges[5];
-  uniform float uActive;
-  uniform float uNeedle;
-  uniform float uOpacity;
-  uniform vec3 uEmber;
-  uniform vec3 uAsh;
-  varying vec2 vUv;
-  void main() {
-    vec2 d = vUv - 0.5;
-    float r = length(d) * 2.0;
-    if (r > 1.0) discard;
-    float a = fract(atan(d.x, d.y) / 6.2831853 + 1.0); // 0 at the top, clockwise
-    float idx = 0.0;
-    float edge = 1.0;
-    for (int i = 1; i < 5; i++) {
-      if (a >= uEdges[i]) idx = float(i);
-      edge = min(edge, abs(a - uEdges[i]) * r * 6.2831853);
-    }
-    edge = min(edge, a * r * 6.2831853);
-    float band = smoothstep(0.4, 0.43, r) * (1.0 - smoothstep(0.95, 0.98, r));
-    float divider = smoothstep(0.006, 0.02, edge);
-    float on = idx == uActive ? 1.0 : 0.0;
-    vec3 col = mix(uAsh * 0.55, uEmber, mod(idx, 2.0) * 0.35 + 0.45 + on * 0.5);
-    float needleA = fract(uNeedle);
-    float da = abs(a - needleA);
-    da = min(da, 1.0 - da) * r * 6.2831853;
-    float needle = (1.0 - smoothstep(0.004, 0.016, da)) * step(r, 0.97);
-    float rim = smoothstep(0.97, 0.985, r) * (1.0 - smoothstep(0.99, 1.0, r));
-    gl_FragColor = vec4(col * band * divider + uEmber * (needle * 1.4 + rim * 0.6), (band * divider * 0.85 + needle + rim) * uOpacity);
   }
 `;
 
@@ -486,13 +446,6 @@ export function createWorld({ atlas }) {
   });
   scene.add(branches);
   const useHi = [0, 0, 0];
-  let useTarget = -1;
-  document.querySelectorAll('.uses > li').forEach((li, i) => {
-    li.addEventListener('pointerenter', () => (useTarget = i));
-    li.addEventListener('pointerleave', () => (useTarget = -1));
-    li.addEventListener('focusin', () => (useTarget = i));
-    li.addEventListener('focusout', () => (useTarget = -1));
-  });
 
   // Method: a ring of six stations orbiting the axle — the loop, literally.
   const loop = new Group();
@@ -530,9 +483,16 @@ export function createWorld({ atlas }) {
     return el;
   });
   const readoutLabel = makeLabel('world-label--readout');
-  const wheelLabel = makeLabel('world-label--kernel');
-  const spikeLabel = makeLabel('world-label--kernel');
-  spikeLabel.textContent = 'spike length · p(glyph | position)';
+  const templateLabels = TOY_GRAMMAR.templates.map(() => {
+    const el = makeLabel('world-label--template');
+    el.dataset.keepIn = '-';
+    return el;
+  });
+  const wordLabels = Array.from({ length: 10 }, () => makeLabel('world-label--term'));
+  const heldLabels = [...TOY_HELDOUT].map(() => makeLabel('world-label--held'));
+  const dartLabel = makeLabel('world-label--dart');
+  const hoverLabel = makeLabel('world-label--hover');
+  dartLabel.dataset.keepIn = hoverLabel.dataset.keepIn = '-';
   const stationLabel = makeLabel('world-label--station');
   const tmp = new Vector3();
   const place = (el, point, opacity, inRotor = true) => {
@@ -543,8 +503,17 @@ export function createWorld({ atlas }) {
     tmp.copy(point);
     if (inRotor) rotor.localToWorld(tmp);
     tmp.project(camera);
+    let x = ((tmp.x + 1) / 2) * view.w;
+    if (el.dataset.keepIn) {
+      // Legend labels stay whole on screen, however wide the disc's rim runs.
+      if (el.dataset.keepIn !== el.textContent) {
+        el.dataset.keepIn = el.textContent;
+        el.halfW = el.offsetWidth / 2;
+      }
+      x = Math.min(view.w - el.halfW - 8, Math.max(el.halfW + 8, x));
+    }
     el.style.opacity = String(opacity);
-    el.style.transform = `translate(${((tmp.x + 1) / 2) * view.w}px, ${((1 - tmp.y) / 2) * view.h}px) translate(-50%, -50%)`;
+    el.style.transform = `translate(${x}px, ${((1 - tmp.y) / 2) * view.h}px) translate(-50%, -50%)`;
   };
 
   /* ── The sampler, made physical ────────────────────────────────────── */
@@ -588,83 +557,40 @@ export function createWorld({ atlas }) {
   const drawSample = (now, fast) => {
     const s = sample(TOY_GRAMMAR, { tau: kernel.tau });
     tally.drawn++;
-    wheel.active = TOY_GRAMMAR.templates.findIndex((t) => t.id === s.template);
     spinTo(s.pw, now, { chars: s.chars, fast });
   };
 
-  /* ── The kernel, in geometry ───────────────────────────────────────── */
-  // Spikes: p(glyph | disc) estimated by sampling the induced grammar at τ, with words centred on
-  // the drum exactly as the sampler places them. Wheel: template odds p^(1/τ), renormalised.
-  const kernel = { tau: 1.4 };
-  const spikeGeo = new InstancedBufferGeometry();
-  const spikeBox = new BoxGeometry(0.05, 1, 0.028).translate(0, 0.5, 0);
-  spikeGeo.index = spikeBox.index;
-  spikeGeo.setAttribute('position', spikeBox.getAttribute('position'));
-  spikeGeo.setAttribute('aRing', new InstancedBufferAttribute(aRing, 1));
-  spikeGeo.setAttribute('aSlot', new InstancedBufferAttribute(aSlot, 1));
-  const aP = new Float32Array(n);
-  const aPAttr = new InstancedBufferAttribute(aP, 1);
-  spikeGeo.setAttribute('aP', aPAttr);
-  spikeGeo.instanceCount = n;
-  const spikeMat = new ShaderMaterial({
-    vertexShader: spikeVert,
-    fragmentShader: spikeFrag,
-    transparent: true,
-    depthWrite: false,
-    blending: AdditiveBlending,
-    uniforms: {
-      uRingAngle: { value: ringAngle }, uRingX: { value: ringX }, uKernel: { value: 0 }, uDim: { value: 1 },
-      uEmber: { value: C.ember }, uBone: { value: C.bone },
-    },
-  });
-  const spikes = new Mesh(spikeGeo, spikeMat);
-  spikes.frustumCulled = false;
-  rotor.add(spikes);
-
-  const wheel = { active: -1, needle: 0, target: 0 };
-  const wheelMat = new ShaderMaterial({
-    vertexShader: auraVert,
-    fragmentShader: wheelFrag,
-    transparent: true,
-    depthWrite: false,
-    uniforms: {
-      uEdges: { value: [0, 0, 0, 0, 0] }, uActive: { value: -1 }, uNeedle: { value: 0 }, uOpacity: { value: 0 },
-      uEmber: { value: C.ember }, uAsh: { value: C.ash },
-    },
-  });
-  const wheelMesh = new Mesh(new PlaneGeometry(CAP_R * 1.9, CAP_R * 1.9), wheelMat);
-  wheelMesh.rotation.y = -Math.PI / 2; // faces out of the left cap (−x)
-  wheelMesh.position.x = -CAP_W / 2 - 0.004;
-  caps[0].add(wheelMesh);
-
-  const computeKernel = () => {
-    const counts = new Float32Array(n);
-    for (let k = 0; k < KERNEL_SAMPLES; k++) {
-      centred(sample(TOY_GRAMMAR, { tau: kernel.tau }).chars).forEach(({ ch }, r) => {
-        const c = RING_SET.indexOf(ch.toLowerCase());
-        if (c > 0) counts[r * SLOTS + c]++; // slot 0 is the blank: no glyph at this position
-      });
-    }
-    for (let i = 0; i < n; i++) aP[i] = counts[i] / KERNEL_SAMPLES;
-    aPAttr.needsUpdate = true;
-    const w = TOY_GRAMMAR.templates.map((t) => t.p ** (1 / kernel.tau));
-    const sum = w.reduce((a, b) => a + b, 0);
-    kernel.templates = TOY_GRAMMAR.templates.map((t, i) => ({ ...t, q: w[i] / sum }));
-    let acc = 0;
-    const edges = wheelMat.uniforms.uEdges.value;
-    kernel.templates.forEach((t, i) => {
-      edges[i] = acc;
-      acc += t.q;
-    });
-    edges[4] = 1;
+  /* ── The distribution, in geometry (below the drum) ──────────────── */
+  const kernel = { tau: 1.4 }; // the drum's sampling τ: the sandbox slider's
+  window.addEventListener('sandbox:tau', (e) => (kernel.tau = e.detail));
+  const disc = createDisc({ C, grammar: TOY_GRAMMAR, heldout: TOY_HELDOUT });
+  disc.group.position.y = DISC_Y;
+  scene.add(disc.group);
+  // The disc's own τ: breathes by itself on the temperature beat until the visitor takes the slider.
+  const discTau = { value: 1, manual: false, lastBreath: 0 };
+  const tauInputs = [...document.querySelectorAll('[data-disc-tau]')];
+  const setDiscTau = (tau) => {
+    discTau.value = tau;
+    disc.setTau(tau);
+    tauInputs.forEach((input) => (input.value = tau.toFixed(1)));
+    document.querySelectorAll('[data-disc-tau-out]').forEach((o) => (o.textContent = tau.toFixed(1)));
   };
-  computeKernel();
-  let tauTimer = 0;
-  window.addEventListener('sandbox:tau', (e) => {
-    kernel.tau = e.detail;
-    clearTimeout(tauTimer);
-    tauTimer = setTimeout(computeKernel, 90);
-  });
+  tauInputs.forEach((input) =>
+    input.addEventListener('input', () => {
+      discTau.manual = true;
+      setDiscTau(Number(input.value));
+    }),
+  );
+  let lastThrow = -1e9;
+  let userThrow = -1e9;
+  const discReadouts = [...document.querySelectorAll('[data-disc-readout]')];
+  const throwDart = (now, byUser) => {
+    const leaf = disc.throwDart(now);
+    lastThrow = now;
+    if (byUser) userThrow = now;
+    if (leaf?.held) window.dispatchEvent(new CustomEvent('disc:hit', { detail: leaf.pw }));
+  };
+  document.querySelectorAll('[data-disc-throw]').forEach((b) => b.addEventListener('click', () => throwDart(performance.now(), true)));
 
   let batch = []; // the sandbox's current list: cycled on the drum while the visitor is there
   let sandboxPhase = null; // the induction step running in the sandbox, spelled on the drum
@@ -687,21 +613,25 @@ export function createWorld({ atlas }) {
     const word = CHAPTER_WORD[e.detail];
     arrival = word ? { word, t: performance.now() } : null;
   });
-  const stationOf = () => Math.max(0, Math.min(5, Math.round(pose.local * 5)));
+  // The caption beat the visitor is on, within the current chapter.
+  const beatIn = (id) => Math.round(pose.local * Math.max(0, SHOTS[id].length - 1));
+  const here = (id) => Math.abs(pose.chapter - at(id)) < 0.5;
+  const stationOf = () => (here('method') ? beatIn('method') - 1 : -1); // -1: the chapter's intro beat
   const mode = () => {
     const c = pose.chapter;
-    const here = Math.abs(c - at('sandbox')) < 0.5;
-    if (here && !inSandbox) window.dispatchEvent(new CustomEvent('sandbox:request')); // replay its list
-    inSandbox = here;
+    const inBox = here('sandbox');
+    if (inBox && !inSandbox) window.dispatchEvent(new CustomEvent('sandbox:request')); // replay its list
+    inSandbox = inBox;
     if (intro.active) return { word: BOOKEND };
     if (arrival && performance.now() - arrival.t < 3400) return { word: arrival.word };
+    if (here('structure') && beatIn('structure') === 2) return { sample: true, fast: true, hold: 420 };
     if (c >= at('scope') + 0.5) return { word: BOOKEND };
-    if (here && sandboxPhase && sandboxPhase !== 'sample') return { word: sandboxPhase };
-    if (here && batch.length) {
+    if (inBox && sandboxPhase && sandboxPhase !== 'sample') return { word: sandboxPhase };
+    if (inBox && batch.length) {
       if (!queue.length) queue = [...batch];
       return { queue: true };
     }
-    if (Math.abs(c - at('method')) < 0.5) {
+    if (here('method') && stationOf() >= 0) {
       const s = stationOf();
       if (s === 2) return { sample: true, fast: true, hold: 350 };
       if (s === 3) return { sample: true, fast: true, hold: 700 };
@@ -791,7 +721,13 @@ export function createWorld({ atlas }) {
     });
     return best;
   };
-  const interactive = () => pose.chapter < 0.5 || Math.abs(pose.chapter - at('objective')) < 0.5;
+  const interactive = () => here('hero') || (here('objective') && beatIn('objective') === 0);
+  const onDisc = () => now3.disc > 0.6 && here('objective');
+  const discUnder = (cx, cy) => {
+    ndc.set((cx / view.w) * 2 - 1, -(cy / view.h) * 2 + 1);
+    raycaster.setFromCamera(ndc, camera);
+    return disc.pick(raycaster.ray);
+  };
   // Grab the drum and turn it: dragging rolls the discs; a decisive turn moves a chapter.
   const drag = { on: false, y0: 0, last: 0, moved: false };
   const usable = () => !intro.active && now3.dim > 0.3;
@@ -814,6 +750,10 @@ export function createWorld({ atlas }) {
     if (ring >= 0 && ring !== pointer.ring) rings[ring].offVel += 5.5;
     pointer.ring = ring;
     document.documentElement.classList.toggle('is-over-rotor', ring >= 0);
+    const slice = onDisc() && !e.target.closest('a, button, input') ? discUnder(e.clientX, e.clientY) : null;
+    disc.setHover(slice);
+    pointer.slice = slice;
+    document.documentElement.classList.toggle('is-over-disc', !!slice);
   });
   window.addEventListener('pointerup', (e) => {
     if (!drag.on) return;
@@ -824,155 +764,167 @@ export function createWorld({ atlas }) {
   });
   window.addEventListener('click', (e) => {
     if (drag.moved) return void (drag.moved = false);
-    if (e.target.closest('a, button') || !interactive() || ringUnder(e.clientX, e.clientY) < 0) return;
+    if (e.target.closest('a, button, input')) return;
+    if (onDisc() && discUnder(e.clientX, e.clientY)) return throwDart(performance.now(), true);
+    if (!interactive() || ringUnder(e.clientX, e.clientY) < 0) return;
     drawSample(lastNow, true);
   });
 
   /* ── Camera choreography ───────────────────────────────────────────── */
 
-  const fits = {};
   const lengthAt = (explode) => RINGS * PITCH * (1 + explode * 1.2) + 2 * CAP_W;
 
-  // Transform-free layout box of an anchor (offset chain ignores the stage's shot transforms).
-  const boxOf = (el) => {
-    let x = 0;
-    let y = 0;
-    for (let node = el; node; node = node.offsetParent) {
-      x += node.offsetLeft;
-      y += node.offsetTop;
+  // What a shot must keep in view: the drum's bounding box (when it shows) and its set pieces.
+  const subjectPoints = (p) => {
+    const pts = [];
+    const L = lengthAt(p.explode) / 2 + 0.35; // the axle's ends
+    const top = CAP_R + (p.slots ? 0.9 : 0);
+    const bottom = -CAP_R - (p.readout ? 1.25 : 0);
+    if (p.dim > 0.02) {
+      for (const x of [-L, L]) for (const y of [bottom, top]) for (const z of [-CAP_R, CAP_R]) pts.push(new Vector3(x, y, z));
     }
-    return { left: x, top: y, width: el.offsetWidth, height: el.offsetHeight };
+    for (let k = 0; p.loop && k < 16; k++) {
+      const a = (k / 16) * TAU;
+      pts.push(new Vector3(Math.cos(a) * LOOP_R * 1.06, Math.sin(a) * LOOP_R * 1.06 - (p.station ? 0.3 : 0), 0));
+    }
+    if (p.branch) branchTips.forEach((t) => pts.push(t.clone().add(new Vector3(0, 0.5, 0))));
+    for (let k = 0; p.disc > 0.5 && k < 24; k++) {
+      const a = (k / 24) * TAU;
+      const r = DISC_R + 1.25; // the held-out names and template legend around the rim
+      for (const y of [0, 1.3]) pts.push(new Vector3(Math.cos(a) * r, DISC_Y + y, Math.sin(a) * r));
+    }
+    return pts;
   };
 
+  // Camera distance and screen offset that fit the subject into a box (px): for each point, the
+  // distance at which it projects just inside the box, in the camera's own basis — exact under
+  // perspective, so a near cap can't spill out of the frame.
   const fit = (box, p) => {
     const tan = Math.tan((FOV * Math.PI) / 360);
-    const L = lengthAt(p.explode);
-    const D = 2 * CAP_R;
-    let W = L * Math.abs(Math.cos(p.az)) + D * Math.abs(Math.sin(p.az));
-    let H = D * Math.cos(p.el) + L * Math.abs(Math.sin(p.az) * Math.sin(p.el));
-    if (p.loop) {
-      W = Math.max(W, 2 * LOOP_R * 1.1);
-      H = Math.max(H, 2 * LOOP_R * 1.1);
+    const tanX = tan * camera.aspect * Math.max(0.05, box.width / view.w);
+    const tanY = tan * Math.max(0.05, box.height / view.h);
+    const back = new Vector3(Math.sin(p.az) * Math.cos(p.el), Math.sin(p.el), Math.cos(p.az) * Math.cos(p.el));
+    const right = new Vector3(0, 1, 0).cross(back).normalize();
+    const up = back.clone().cross(right);
+    const look = new Vector3(p.lookX, p.lookY, p.lookZ);
+    let dist = 0;
+    for (const q of subjectPoints(p)) {
+      const v = q.sub(look);
+      const depth = v.dot(back);
+      dist = Math.max(dist, depth + Math.abs(v.dot(right)) / tanX, depth + Math.abs(v.dot(up)) / tanY);
     }
-    if (p.branch) {
-      W = Math.max(W, 5.6);
-      H += 2.4;
-    }
-    if (p.slots) H += 0.9; // room for the slot labels above the discs
-    const fracW = Math.max(0.05, box.width / view.w);
-    const fracH = Math.max(0.05, box.height / view.h);
     return {
-      dist: Math.max(W / (2 * tan * camera.aspect * fracW), H / (2 * tan * fracH), 4.5),
+      dist: Math.max(dist ? dist * 1.08 : 12, 4.5) * p.zoom, // margin for pointer parallax
       sx: (box.left + box.width / 2 - view.w / 2) / view.w,
       sy: (box.top + box.height / 2 - view.h / 2) / view.h,
     };
   };
 
-  // Text bound to the drum (wide screens): the real DOM text of Uses and Method rides 3D points.
-  const useItems = [...document.querySelectorAll('#uses .uses > li')];
-  const stationItems = [...document.querySelectorAll('#method [data-inspect-track] > li')];
-  const sizes = new Map();
-  const toScreen = (v) => {
-    tmp.copy(v).project(camera);
-    return { x: ((tmp.x + 1) / 2) * view.w, y: ((1 - tmp.y) / 2) * view.h };
-  };
-  // In bound mode the Uses list and the Method stations are lifted out of the shot's content
-  // window (which clips and fades its edges) into the shot itself; they go back on narrow screens.
-  const lifted = ['#uses .uses', '#method .inspect']
-    .map((sel) => document.querySelector(sel))
-    .filter(Boolean)
-    .map((el) => {
-      const marker = document.createComment('bound-text');
-      el.before(marker);
-      return { el, marker, scene: el.closest('[data-scene]') };
-    });
-  const setLifted = (bound) =>
-    lifted.forEach(({ el, marker, scene }) => {
-      if (bound && el.parentElement !== scene) scene.append(el);
-      if (!bound && el.parentElement === scene) marker.after(el);
-    });
-  const overlaps = (a, b) => a.x < b.right && a.x + a.w > b.left && a.y < b.bottom && a.y + a.h > b.top;
-  // side: where the block sits relative to its point — 'left' | 'right' | 'above'. It is clamped to
-  // the frame and pushed clear of `avoid` (the shot's headline and blocks already placed).
-  const bind = (el, point, side, opacity, avoid) => {
-    const { w, h } = sizes.get(el) ?? { w: 0, h: 0 };
-    const at = toScreen(point);
-    const r = { w, h, x: side === 'left' ? at.x - w - 18 : side === 'right' ? at.x + 18 : at.x - w / 2 };
-    r.y = side === 'above' ? at.y - h - 18 : at.y - h / 2;
-    const clampX = (x) => Math.min(view.w - w - 24, Math.max(24, x));
-    const clampY = (y) => Math.min(view.h - h - 84, Math.max(84, y));
-    const clear = (c) => !avoid.some((o) => overlaps(c, o));
-    r.x = clampX(r.x);
-    r.y = clampY(r.y);
-    if (!clear(r)) {
-      // Search beside each obstacle (below, above, right, left); keep the first clear spot, else
-      // the original. Candidates are clamped to the frame, so a "fix" can't drift off-screen.
-      const candidates = avoid.flatMap((o) => [
-        { x: r.x, y: o.bottom + 14 }, { x: r.x, y: o.top - h - 14 },
-        { x: o.right + 14, y: r.y }, { x: o.left - w - 14, y: r.y },
-      ]).map((c) => ({ w, h, x: clampX(c.x), y: clampY(c.y) }));
-      const spot = candidates.find(clear);
-      if (spot) Object.assign(r, spot);
-    }
-    avoid.push({ left: r.x, right: r.x + w, top: r.y, bottom: r.y + h });
-    const box = el.parentElement.getBoundingClientRect();
-    el.style.transform = `translate(${r.x - box.left}px, ${r.y - box.top}px)`;
-    el.style.opacity = String(opacity);
-  };
-  const headlineRects = (id) =>
-    [...document.querySelectorAll(`#${id} .scene__body > :is(.eyebrow, h2, .lede, .eyebrow-row)`)]
-      .map((el) => el.getBoundingClientRect())
-      .filter((r) => r.width);
-  const nodeWorld = new Vector3();
-
+  const fits = {};
+  const frameEl = document.querySelector('[data-visual-frame]');
   const resize = (w, h) => {
     view.w = w;
     view.h = h;
-    const bound = w >= 1180 && h >= 680; // room for text beside the drum; smaller screens keep the column layout
-    document.documentElement.classList.toggle('is-bound', bound);
-    setLifted(bound);
-    [...useItems, ...stationItems].forEach((el) => {
-      if (!bound) el.style.transform = el.style.opacity = '';
-      sizes.set(el, { w: el.offsetWidth, h: el.offsetHeight });
-    });
     camera.aspect = w / h;
     ghostMat.uniforms.uPixelRatio.value = Math.min(window.devicePixelRatio, 1.5);
-    for (const id of ids) {
-      const anchor = document.getElementById(id).querySelector('[data-rotor-slot], [data-rotor-anchor]');
-      const box = anchor && anchor.offsetWidth ? boxOf(anchor) : null;
-      fits[id] = box ? fit(box, POSES[id]) : { dist: 26, sx: narrow() ? 0 : 0.36, sy: -0.3 };
+    const narrow = w < 900 || w / h < 1.1;
+    // Each chapter's own frame: CSS may split the screen differently per chapter (html[data-chapter]).
+    const root = document.documentElement;
+    const was = root.dataset.chapter;
+    const frameOf = (id) => {
+      root.dataset.chapter = id;
+      const fr = frameEl?.getBoundingClientRect();
+      return fr?.width > 40 && fr?.height > 40 ? fr : { left: 0, top: 0, width: w, height: h };
+    };
+    for (const [id, shots] of Object.entries(SHOTS)) {
+      const frame = frameOf(id);
+      fits[id] = shots.map((sh) => {
+        const [cx, cy, bw, bh] = (narrow && sh.nbox) || sh.box;
+        const box = {
+          left: frame.left + (cx - bw / 2) * frame.width,
+          top: frame.top + (cy - bh / 2) * frame.height,
+          width: bw * frame.width,
+          height: bh * frame.height,
+        };
+        return fit(box, sh);
+      });
     }
+    if (was === undefined) delete root.dataset.chapter;
+    else root.dataset.chapter = was;
   };
 
-  // Live anchors move with their shot's content (the sandbox's slot scrolls with its panels),
-  // so they are re-measured on screen every frame while that shot is near.
-  const live = Object.fromEntries(
-    ids.map((id) => [id, document.getElementById(id).querySelector('[data-rotor-live]')]).filter(([, a]) => a),
-  );
-  const followLive = () => {
-    for (const [id, anchor] of Object.entries(live)) {
-      if (Math.abs(pose.chapter - at(id)) >= 1) continue;
-      const r = anchor.getBoundingClientRect();
-      if (r.width && r.height) fits[id] = fit(r, POSES[id]);
-    }
+  // The camera state within a chapter at progress `local` (0..1 across its beats).
+  const poseAt = (id, local) => {
+    const shots = SHOTS[id];
+    const x = clamp01(local) * (shots.length - 1);
+    const i = Math.min(shots.length - 1, Math.floor(x));
+    const j = Math.min(shots.length - 1, i + 1);
+    const f = smooth(x - i);
+    const a = { ...shots[i], ...fits[id][i] };
+    const b = { ...shots[j], ...fits[id][j] };
+    const out = {};
+    for (const k of [...NUM_KEYS, 'dist', 'sx', 'sy']) out[k] = a[k] + (b[k] - a[k]) * f;
+    out.az = a.az + wrap(b.az - a.az) * f;
+    return out;
   };
 
-  const poseFor = (id) => {
-    const p = { ...POSES[id], ...fits[id] };
-    if (id === 'method' && stationOf() === 1) p.explode = 0.65; // induce: the grammar, exploded into its slots
-    return p;
+  // Disc labels: the templates on the inner ring, the widest words, the toy held-out towers, the
+  // last dart's password, the slice under the pointer, and the live readout.
+  const pct = (q) => (q >= 0.1 ? `${Math.round(q * 100)}%` : q >= 0.001 ? `${(q * 100).toFixed(1)}%` : '<0.1%');
+  const shape = (pattern) => pattern.map((k) => SLOT_LABELS[k] ?? k).join(' + ');
+  const dv = new Vector3();
+  const atDisc = (node) => disc.group.localToWorld(disc.anchor(node, dv));
+  const lift = (v, y) => ((v.y += y), v);
+  const placeDiscLabels = () => {
+    const o = clamp01((now3.disc - 0.6) / 0.4);
+    disc.templates.forEach((t, i) => {
+      templateLabels[i].textContent = `${shape(t.pattern)} · ${pct(t.q)}`;
+      const a = (t.a[0] + t.a[1]) / 2;
+      dv.set(Math.cos(a) * (DISC_R + 0.95), 0, Math.sin(a) * (DISC_R + 0.95));
+      place(templateLabels[i], disc.group.localToWorld(dv), t.a[1] - t.a[0] > 0.3 ? o : 0, false);
+    });
+    const words = disc.templates.flatMap((t) => t.children).sort((x, y) => y.a[1] - y.a[0] - (x.a[1] - x.a[0]));
+    wordLabels.forEach((el, k) => {
+      const c = words[k];
+      el.textContent = c ? c.term : '';
+      place(el, c ? atDisc(c) : tmp, c && c.a[1] - c.a[0] > 0.3 ? o * 0.9 : 0, false);
+    });
+    const heldLeaves = disc.leaves.filter((c) => c.held);
+    heldLabels.forEach((el, k) => {
+      const c = heldLeaves[k];
+      if (!c) return place(el, tmp, 0);
+      el.textContent = c.pw;
+      el.classList.toggle('is-hit', disc.dart.hits.has(c.pw));
+      place(el, atDisc(c), o * 0.85, false);
+    });
+    const d = disc.dart.node;
+    const t = (performance.now() - disc.dart.t0) / 1000;
+    if (d) {
+      dartLabel.textContent = `◎ ${d.pw} · ${pct(d.q)}`;
+      dartLabel.classList.toggle('is-hit', d.held);
+    }
+    place(dartLabel, d ? lift(atDisc(d), 0.5) : tmp, d && t > 0.3 ? o * Math.max(0, Math.min(1, 3.2 - t)) : 0, false);
+    const h = pointer.slice;
+    if (h) {
+      hoverLabel.textContent = h.ring === 0
+        ? `template ${shape(h.pattern)} — ${pct(h.q)} of draws`
+        : `${h.parts.map((x) => x.text).join(' + ')} — ${pct(h.q)}${h.leaf ? (h.held ? ' · toy held-out' : '') : ' of draws'}`;
+    }
+    place(hoverLabel, h ? lift(atDisc(h), 0.25) : tmp, h ? o : 0, false);
+    const text = `${disc.dart.count} darts thrown · held-out hit ${disc.dart.hits.size}/${TOY_HELDOUT.size} · held-out mass at τ ${disc.stats.tau.toFixed(1)}: ${pct(disc.stats.heldMass)}`;
+    discReadouts.forEach((r) => r.textContent !== text && (r.textContent = text));
   };
 
   const now3 = {};
   const update = (now) => {
     step(now);
-    followLive();
     const i0 = Math.max(0, Math.min(ids.length - 1, Math.floor(pose.chapter)));
     const i1 = Math.min(ids.length - 1, i0 + 1);
     const f = smooth(clamp01(pose.chapter - i0));
-    const a = poseFor(ids[i0]);
-    const b = poseFor(ids[i1]);
-    for (const k of KEYS) now3[k] = a[k] + (b[k] - a[k]) * f;
+    // At rest: the chapter's own shots. In flight: from the last shot of one chapter to the first of the next.
+    const a = f > 0 ? poseAt(ids[i0], 1) : poseAt(ids[i0], pose.local);
+    const b = f > 0 ? poseAt(ids[i1], 0) : a;
+    for (const k of Object.keys(a)) now3[k] = a[k] + (b[k] - a[k]) * f;
     now3.az = a.az + wrap(b.az - a.az) * f;
 
     // Transit arc: the camera pulls out and lifts while it travels between shots.
@@ -997,8 +949,12 @@ export function createWorld({ atlas }) {
     pointer.y += (pointer.ty - pointer.y) * 0.04;
     az += pointer.x * 0.12;
     el -= pointer.y * 0.06;
-    camera.position.set(Math.sin(az) * Math.cos(el) * dist, Math.sin(el) * dist + now3.lookY, Math.cos(az) * Math.cos(el) * dist);
-    camera.lookAt(0, now3.lookY, 0);
+    camera.position.set(
+      now3.lookX + Math.sin(az) * Math.cos(el) * dist,
+      now3.lookY + Math.sin(el) * dist,
+      now3.lookZ + Math.cos(az) * Math.cos(el) * dist,
+    );
+    camera.lookAt(now3.lookX, now3.lookY, now3.lookZ);
     camera.setViewOffset(view.w, view.h, -now3.sx * view.w, -now3.sy * view.h, view.w, view.h);
     camera.updateProjectionMatrix();
 
@@ -1027,22 +983,24 @@ export function createWorld({ atlas }) {
 
     const dim = now3.dim * introGain;
     glyphMat.uniforms.uDim.value = dim;
-    solids.forEach((m) => (m.uniforms.uDim.value = (0.35 + 0.65 * now3.dim) * introGain));
+    solids.forEach((m) => (m.uniforms.uDim.value = (0.35 + 0.65 * now3.dim) * clamp01(now3.dim * 4) * introGain));
     barMat.opacity = 0.75 * dim;
     rimMat.opacity = 0.9 * dim;
 
-    // The kernel: spikes on every disc, the template wheel on the left cap.
-    spikeMat.uniforms.uKernel.value = now3.kernel * introGain;
-    spikeMat.uniforms.uDim.value = dim;
-    spikes.visible = now3.kernel > 0.01;
-    wheelMat.uniforms.uOpacity.value = now3.kernel * dim;
-    wheelMat.uniforms.uActive.value = phase === 'hold' ? wheel.active : -1;
-    if (wheel.active >= 0) {
-      const e = wheelMat.uniforms.uEdges.value;
-      wheel.target = (e[wheel.active] + e[wheel.active + 1]) / 2;
+    rotor.visible = now3.dim > 0.02;
+
+    // The distribution: τ breathes on its own on the temperature beat until the visitor takes over;
+    // darts fall by themselves now and then, more rarely once the visitor has thrown one.
+    disc.update(now, { opacity: clamp01(now3.disc) });
+    if (now3.disc > 0.6) {
+      if (now3.breathe > 0.5 && !discTau.manual && now - discTau.lastBreath > 200) {
+        discTau.lastBreath = now;
+        setDiscTau(Math.round(Math.min(2.6, Math.max(0.5, 1.4 + 1.1 * Math.sin(now * 0.0007))) * 10) / 10);
+      } else if (now3.breathe < 0.5 && !discTau.manual && discTau.value !== 1 && here('objective')) {
+        setDiscTau(1);
+      }
+      if (now - lastThrow > 2300 && now - userThrow > 6000) throwDart(now, false);
     }
-    wheel.needle += wrapUnit(wheel.target - wheel.needle) * 0.08;
-    wheelMat.uniforms.uNeedle.value = wheel.needle;
 
     const glowing = hit && phase === 'hold';
     aura.position.copy(rotor.position);
@@ -1056,6 +1014,7 @@ export function createWorld({ atlas }) {
     if (now3.ghost > 0.5 && Math.random() < 0.02) flare(1);
 
     branches.visible = now3.branch > 0.01;
+    const useTarget = here('uses') ? beatIn('uses') - 1 : -1; // each Uses beat lights its branch
     branchMats.forEach((m, i) => {
       useHi[i] += ((useTarget === i ? 1 : 0) - useHi[i]) * 0.12;
       m.uniforms.uGrow.value = now3.branch;
@@ -1066,8 +1025,8 @@ export function createWorld({ atlas }) {
 
     loop.visible = now3.loop > 0.01;
     loopRing.material.opacity = 0.5 * now3.loop;
-    const station = stationOf();
-    const inMethod = Math.abs(pose.chapter - at('method')) < 0.5;
+    const station = Math.max(0, stationOf());
+    const inMethod = here('method') && stationOf() >= 0;
     loop.position.copy(rotor.position);
     loop.rotation.z += wrap(Math.PI - (station / 6) * TAU - loop.rotation.z) * 0.06; // current station → reading side
     loopNodes.forEach((node, k) => {
@@ -1090,27 +1049,12 @@ export function createWorld({ atlas }) {
       el.textContent = g.slot === 'name' ? '⟨name⟩' : SLOT_LABELS[g.slot] ? `⟨${SLOT_LABELS[g.slot]}⟩` : `'${g.slot}'`;
       place(el, new Vector3((ringX[g.start] + ringX[g.end]) / 2, CAP_R + 0.42, 0), now3.slots * dim);
     });
-    const bound = document.documentElement.classList.contains('is-bound');
     const usesOn = now3.uses * clamp01(now3.branch * 1.4 - 0.3);
     useLabels.forEach((el, i) => {
-      place(el, new Vector3(0, 0.32, 0).add(branchTips[i]), bound ? 0 : usesOn, false);
+      place(el, new Vector3(0, 0.32, 0).add(branchTips[i]), usesOn, false);
       el.classList.toggle('is-hi', useHi[i] > 0.5);
     });
-    if (bound && usesOn > 0.01) {
-      const avoid = headlineRects('uses');
-      useItems.forEach((el, i) => bind(el, branchTips[i], ['left', 'above', 'right'][i], usesOn, avoid));
-    }
-    if (bound && inMethod) {
-      loopNodes[station].getWorldPosition(nodeWorld);
-      const avoid = headlineRects('method');
-      stationItems.forEach((el, k) => {
-        el.classList.toggle('is-current', k === station);
-        if (k === station) bind(el, nodeWorld, 'left', 1, avoid);
-      });
-    }
-    wheelLabel.textContent = `templates · τ ${kernel.tau.toFixed(1)}`;
-    place(wheelLabel, new Vector3(caps[0].position.x - 0.3, -CAP_R - 0.4, 0), now3.kernel > 0.9 ? now3.kernel * dim : 0);
-    place(spikeLabel, new Vector3(0, CAP_R + SPIKE_MAX + 0.35, 0), now3.kernel > 0.9 && !now3.slots ? now3.kernel * dim * 0.85 : 0);
+    placeDiscLabels();
     readoutLabel.textContent = `toy sampler · ${tally.drawn} drawn · held-out ${tally.hits.size}/${TOY_HELDOUT.size} hit`;
     place(readoutLabel, new Vector3(0, -CAP_R - 1.05, 0), now3.readout);
     stationLabel.textContent = `station ${String(station + 1).padStart(2, '0')} · ${STATIONS[station]}`;
@@ -1124,7 +1068,7 @@ export function createWorld({ atlas }) {
     update,
     debug: () => ({
       fits, now3: { ...now3 }, view: { ...view }, pose: { ...pose },
-      loop: { rotZ: loop.rotation.z, station: stationOf(), nodes: loopNodes.map((nd) => toScreen(nd.getWorldPosition(new Vector3()))) },
+      loop: { rotZ: loop.rotation.z, station: stationOf() },
     }),
     /** chapter: float scene index (fractional in transit); local: 0..1 progress within the scene;
      *  transit: 0 at rest → 1 mid-travel; velocity: signed scroll speed (viewports/s, smoothed). */
