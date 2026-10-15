@@ -11,7 +11,7 @@ export default defineConfig({
     __BUILD_ID__: JSON.stringify((process.env.GITHUB_SHA || 'local').slice(0, 7)),
   },
   build: {
-    target: 'es2020',
+    target: 'es2022', // top-level await in main.js
     assetsInlineLimit: 0,
   },
 });

@@ -7,319 +7,295 @@
     <meta name="description" content="Enigmista models the structure of an authorised password corpus and generates new, previously-unseen candidates that fit its distribution — for policy audits, honeyword decoys, synthetic data, and research." />
     <title>Enigmista — a grammar machine for authorised password research</title>
     <link rel="icon" href="data:," />
+    <script>
+      // Decide the mode before first paint: the immersive stage, or the calm document.
+      // Calm when the OS asks for reduced motion or the visitor chose it (stored per browser).
+      (function () {
+        var calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        try { if (localStorage.getItem('enigmista:mode') === 'calm') calm = true; } catch (e) {}
+        document.documentElement.classList.add(calm ? 'is-calm' : 'is-stage');
+      })();
+    </script>
   </head>
   <body>
-    <a class="skip" href="#what">Skip to content</a>
+    <a class="skip" href="#structure">Skip to content</a>
+
+    <!-- §00 Boot: deciphers ENIGMISTA as real loading steps complete. Stage mode only. -->
+    <div class="boot" data-boot role="status" aria-live="polite" aria-label="Loading">
+      <div class="boot__inner">
+        <div class="boot__rotors" data-rotors aria-hidden="true"></div>
+        <div class="boot__meter">
+          <span class="boot__cells" data-cells aria-hidden="true"></span>
+          <span class="label" data-pct>000%</span>
+        </div>
+        <p class="label boot__status">Deciphering</p>
+        <ol class="boot__log label" data-log></ol>
+        <button class="boot__skip label" type="button" data-skip hidden>Enter ⏎</button>
+      </div>
+    </div>
+
     <canvas class="field" aria-hidden="true"></canvas>
 
-    <header class="masthead">
-      <a class="masthead__mark" href="#top">Enigmista<span class="dot">.</span></a>
-      <nav aria-label="Sections">
-        <ol class="masthead__nav">
-          <li><a href="#what">What</a></li>
-          <li><a href="#method">Method</a></li>
-          <li><a href="#sandbox">Sandbox</a></li>
-          <li><a href="#scope">Scope</a></li>
-          <li><a href="#install">Install</a></li>
-        </ol>
+    <!-- HUD: fixed chrome around the stage. -->
+    <div class="hud" data-hud>
+      <div class="hud__frame" aria-hidden="true"></div>
+      <div class="hud__top">
+        <a class="hud__mark" href="#hero" data-goto="0">Enigmista<span class="dot">.</span></a>
+        <p class="label hud__chapter" data-hud-chapter aria-live="polite"></p>
+        <button class="label hud__mode" type="button" data-mode-toggle>Calm mode</button>
+      </div>
+      <nav class="hud__rail" aria-label="Chapters">
+        <ol data-rail></ol>
       </nav>
+      <div class="hud__bottom">
+        <button class="label hud__step" type="button" data-prev>◂ Prev</button>
+        <div class="hud__progress" aria-hidden="true">
+          <span class="label" data-count>01 / 08</span>
+          <span class="hud__bar"><span data-bar></span></span>
+        </div>
+        <button class="label hud__step" type="button" data-next>Next ▸</button>
+      </div>
+    </div>
+
+    <!-- Calm-mode header (document layout). -->
+    <header class="masthead">
+      <a class="masthead__mark" href="#hero">Enigmista<span class="dot">.</span></a>
+      <button class="label masthead__mode" type="button" data-mode-toggle>Immersive mode</button>
     </header>
 
-    <main id="top">
-      <!-- §01 Hero. Preloader (CP4) resolves into this; the WebGL grammar tree (CP5) sits behind it. -->
-      <section class="hero" aria-labelledby="hero-title">
-        <p class="label" data-scramble>§01 · A grammar machine for authorised research</p>
-        <h1 class="wordmark" id="hero-title"><span data-scramble>Enigmista</span><span class="dot">.</span></h1>
-        <p class="hero__lede">
-          Enigmista models the structure of an <em>authorised</em> password corpus and generates new,
-          previously-unseen candidates that fit its distribution — for policy audits, honeyword decoys,
-          synthetic data, and research.
-        </p>
-        <p class="label muted"><span lang="it">enigmista</span> (it.) — one who crafts and solves enigmas</p>
-        <a class="label scroll-cue" href="#what">Scroll to decipher ↓</a>
+    <main class="stage" data-stage>
+      <section class="scene scene--hero" id="hero" data-scene data-title="Enigmista" data-length="1.3" aria-labelledby="hero-title">
+        <div class="scene__body">
+          <p class="label eyebrow" data-scramble>§01 · A grammar machine for authorised research</p>
+          <h1 class="wordmark" id="hero-title"><span data-scramble>Enigmista</span><span class="dot">.</span></h1>
+          <p class="lede">
+            Enigmista models the structure of an <em>authorised</em> password corpus and generates new,
+            previously-unseen candidates that fit its distribution — for policy audits, honeyword decoys,
+            synthetic data, and research.
+          </p>
+          <p class="label muted"><span lang="it">enigmista</span> (it.) — one who crafts and solves enigmas</p>
+          <button class="btn" type="button" data-next>Begin decipherment ▸</button>
+        </div>
       </section>
 
-      <!-- §02 What it is -->
-      <section class="section" id="what" aria-labelledby="what-title">
-        <p class="label">§02 · What it is</p>
-        <h2 id="what-title">It reads the shape of a corpus, never the secrets of a person.</h2>
-        <div class="prose">
-          <p>
-            Enigmista is a neurosymbolic, agentic password-candidate generator. You give it a seed corpus
-            you are authorised to analyse — a population of passwords — and it learns the grammar
-            underneath: the templates people reach for, the slots they fill, the themes they draw from.
-            Then it writes new candidates in that grammar, in the order the grammar thinks most likely.
+      <section class="scene" id="structure" data-scene data-title="Structure" data-length="1.5" aria-labelledby="structure-title">
+        <div class="scene__body">
+          <p class="label eyebrow" data-scramble>§02 · Structure</p>
+          <h2 id="structure-title" data-scramble>It reads the shape of a corpus, never the secrets of a person.</h2>
+          <p class="lede">
+            Give it a seed corpus you're authorised to analyse — a population of passwords — and it learns the
+            grammar underneath: the templates people reach for, the slots they fill, the themes they draw from.
           </p>
-          <p>Two layers do the work, and each does only what it is good at.</p>
+          <dl class="layers">
+            <div>
+              <dt class="label">Neural · the language model</dt>
+              <dd>Induces the grammar from the seed — names the themes, categorises the slots, and extends the dictionaries with plausible members it was never shown.</dd>
+            </div>
+            <div>
+              <dt class="label">Symbolic · sampler &amp; scorer</dt>
+              <dd>A deterministic sampler draws candidates in probability order; a scorer checks them against real passwords held out from training.</dd>
+            </div>
+          </dl>
+          <p class="label muted">The model proposes the grammar. The symbolic layer owns the probability.</p>
         </div>
-        <dl class="layers">
-          <div>
-            <dt><span class="label">Neural</span> The language model</dt>
-            <dd>
-              Induces a generative grammar from the seed: names the themes, categorises the slots, and
-              extends the dictionaries with plausible members it was never shown. This is where it beats a
-              plain statistical model — it generalises beyond what it saw.
-            </dd>
-          </div>
-          <div>
-            <dt><span class="label">Symbolic</span> The sampler and the scorer</dt>
-            <dd>
-              A deterministic sampler draws candidates from that grammar, ordered by probability. A scorer
-              measures how many passwords from a held-out split — real ones the model never trained on —
-              those candidates actually cover. The model proposes the grammar; the symbolic layer owns the
-              probability.
-            </dd>
-          </div>
-        </dl>
-        <h3 class="subhead">Three uses, all defensive</h3>
-        <ul class="uses">
-          <li>
-            <p class="label slot">⟨audit⟩</p>
-            <h4>Password-policy audits</h4>
-            <p>
-              Test a policy you are authorised to audit against the realistic structure of the passwords it
-              governs — the templates, themes, and digit habits a real population actually uses.
-            </p>
-          </li>
-          <li>
-            <p class="label slot">⟨decoy⟩</p>
-            <h4>Honeywords and decoys</h4>
-            <p>
-              Generate decoys that fit the corpus's distribution. The more plausible a decoy, the more
-              reliably a login that uses one signals a breach.
-            </p>
-          </li>
-          <li>
-            <p class="label slot">⟨synth⟩</p>
-            <h4>Synthetic data</h4>
-            <p>
-              Produce password sets with the statistical shape of the real thing, for testing systems and
-              studying structure — and for research into how people actually choose passwords.
-            </p>
-          </li>
-        </ul>
       </section>
 
-      <!-- §03 The method -->
-      <section class="section" id="method" aria-labelledby="method-title">
-        <p class="label">§03 · The method</p>
-        <h2 id="method-title">Predict the passwords you <em>haven't</em> seen.</h2>
-        <div class="prose">
-          <p>
-            A model that perfectly memorises its seed corpus is worthless: it just regenerates what it was
-            already given. So Enigmista is never judged on the seed. It is judged on a frozen held-out split
-            it never trained on — on how much of the unseen-but-real it manages to predict. That reframing is
-            the whole tool.
-          </p>
-          <p>It runs as a goal-based loop: <code>induce → sample → score → analyse misses → refine</code>, repeated until it plateaus or hits a target.</p>
+      <section class="scene" id="uses" data-scene data-title="Uses" data-length="1.5" aria-labelledby="uses-title">
+        <div class="scene__body">
+          <p class="label eyebrow" data-scramble>§03 · Uses</p>
+          <h2 id="uses-title" data-scramble>Three uses. All defensive.</h2>
+          <ul class="uses">
+            <li>
+              <p class="label slot">⟨audit⟩</p>
+              <h3>Password-policy audits</h3>
+              <p>Test a policy you're authorised to audit against the realistic structure of the passwords it governs.</p>
+            </li>
+            <li>
+              <p class="label slot">⟨decoy⟩</p>
+              <h3>Honeywords &amp; decoys</h3>
+              <p>Decoys that fit the corpus's distribution. The more plausible the decoy, the more reliably a login with it signals a breach.</p>
+            </li>
+            <li>
+              <p class="label slot">⟨synth⟩</p>
+              <h3>Synthetic data &amp; research</h3>
+              <p>Password sets with the statistical shape of the real thing — for testing systems and studying how people choose.</p>
+            </li>
+          </ul>
         </div>
-        <ol class="loop">
-          <li>
-            <p class="label">01 · Corpus &amp; protocol</p>
-            <p>
-              Load the authorised seed, deduplicate, and freeze an 80/20 train / held-out split — once. It is
-              never re-split; that would leak the test set. Markov and basic-PCFG baselines set the number to
-              beat.
-            </p>
-          </li>
-          <li>
-            <p class="label">02 · Induce</p>
-            <p>
-              The model builds a first probabilistic context-free grammar from the training split: templates,
-              slot categories, terminal dictionaries, production probabilities, named themes. On a frontier
-              model, an enrichment pass extends the dictionaries with plausible unseen terms.
-            </p>
-          </li>
-          <li>
-            <p class="label">03 · Sample</p>
-            <p>
-              Draw a budget of candidates at temperature τ, ordered by probability — the guess order. Low τ
-              clusters on the modes; high τ reaches into the tails.
-            </p>
-          </li>
-          <li>
-            <p class="label">04 · Score</p>
-            <p>
-              The bundled scorer runs the candidates against the held-out split. Coverage, novelty, and the
-              delta over baseline come only from the scorer — never self-assessed.
-            </p>
-          </li>
-          <li>
-            <p class="label">05 · Analyse misses &amp; refine</p>
-            <p>
-              Read the held-out passwords the candidates missed, hypothesise the structure that's missing,
-              refine the grammar, and go round again.
-            </p>
-          </li>
-          <li>
-            <p class="label">06 · Stop</p>
-            <p>
-              When coverage beats the best baseline by a clear margin and the gains plateau — or when the
-              iteration cap is reached, or coverage regresses twice running and the best grammar is handed
-              back.
-            </p>
-          </li>
-        </ol>
-        <figure class="schema">
-          <pre><code>{
-  "templates": [{"id": "T1", "pattern": ["W","D","S"], "p": 0.42}],
-  "slots": {
-    "W": {"Falcon": 0.12, "Summer": 0.11},
-    "D": {"year": 0.40, "123": 0.14},
-    "S": {"!": 0.54, "@": 0.13}
-  },
-  "themes": ["seasons", "football-clubs"]
-}</code></pre>
-          <figcaption class="label">A grammar, as the loop writes it (abridged) — <code>out/grammar.vN.json</code></figcaption>
-        </figure>
-        <blockquote class="pull">
-          <p>
-            Verification is non-negotiable. A run never claims an improvement because an edit succeeded or
-            the candidates look plausible — it quotes the scorer's numbers on the frozen held-out set.
-          </p>
-        </blockquote>
       </section>
 
-      <!-- §04 The safe sandbox (illustrative). Animated induce → sample arrives in CP7. -->
-      <section class="section" id="sandbox" aria-labelledby="sandbox-title">
-        <p class="label">§04 · The sandbox <span class="tag">Illustrative · toy data</span></p>
-        <h2 id="sandbox-title">Watch a grammar fall out of sixteen fake passwords.</h2>
-        <div class="prose">
-          <p>
-            Everything below runs in your browser on a tiny corpus we invented and bundled with this page.
-            There's nowhere to type a password and nothing is sent anywhere. It illustrates
-            <code>induce → sample</code>; it is not the engine.
+      <section class="scene" id="objective" data-scene data-title="Objective" data-length="1.5" aria-labelledby="objective-title">
+        <div class="scene__body">
+          <p class="label eyebrow" data-scramble>§04 · Objective</p>
+          <h2 id="objective-title" data-scramble>Predict the passwords you haven't seen.</h2>
+          <p class="lede">
+            A model that perfectly memorises its seed is worthless — it only regenerates what it was given.
+            Enigmista is judged on a frozen held-out split it never trained on: on how much of the
+            unseen-but-real it manages to predict.
           </p>
+          <p class="label heldout-key"><span class="swatch"></span> Held-out — never shown to the model. Lights up when a sample lands on it.</p>
         </div>
-        <div class="sandbox" data-sandbox data-keepout>
-          <div class="sandbox__panel">
-            <h3 class="label">Toy seed · train split</h3>
-            <ul class="tokens" data-train></ul>
-            <h3 class="label">Toy held-out · never shown to the model</h3>
-            <ul class="tokens tokens--heldout" data-heldout></ul>
-          </div>
-          <div class="sandbox__panel">
-            <h3 class="label">Grammar a model might induce</h3>
-            <ol class="templates" data-templates></ol>
-            <p class="note">Themes: <span data-themes></span>. Words marked <span class="enriched">+</span> weren't in the seed — that's the enrichment pass.</p>
-          </div>
-          <div class="sandbox__panel">
-            <h3 class="label">Sampled candidates · τ = 1.4</h3>
-            <ol class="candidates" data-candidates></ol>
-            <button class="btn" type="button" data-resample>Sample again</button>
-            <p class="note" data-tally></p>
-          </div>
-        </div>
-        <p class="note">
-          On a corpus this small the grammar's whole support fits inside any budget, so coverage saturates and
-          stops meaning anything. That's why the real loop runs on real-sized, authorised corpora with a frozen
-          split, in the Enigmista skill — <a href="#install">see how to run it</a>.
-        </p>
       </section>
 
-      <!-- §05 Ethics & scope: the one bone-paper section; the field settles to stillness here. -->
-      <section class="section section--paper" id="scope" aria-labelledby="scope-title" data-field="still">
-        <p class="label">§05 · Scope</p>
-        <h2 id="scope-title">The corpus boundary is the whole line.</h2>
-        <div class="prose">
-          <p>
+      <section class="scene scene--method" id="method" data-scene data-title="Method" data-length="3.4" aria-labelledby="method-title">
+        <div class="scene__body">
+          <p class="label eyebrow" data-scramble>§05 · Method</p>
+          <h2 id="method-title" data-scramble>A loop that only believes its scorer.</h2>
+          <p class="lede"><code>induce → sample → score → analyse misses → refine</code> — repeated until coverage plateaus or hits a target.</p>
+          <div class="inspect" data-inspect>
+            <ol class="inspect__track" data-inspect-track>
+              <li>
+                <p class="label">01 · Corpus &amp; protocol</p>
+                <p>Load the authorised seed, deduplicate, and freeze an 80/20 train / held-out split — once. Never re-split; that leaks the test set. Markov and basic-PCFG baselines set the number to beat.</p>
+              </li>
+              <li>
+                <p class="label">02 · Induce</p>
+                <p>The model builds a probabilistic context-free grammar from the training split: templates, slots, terminal dictionaries, probabilities, named themes. On a frontier model, an enrichment pass adds plausible unseen terms.</p>
+              </li>
+              <li>
+                <p class="label">03 · Sample</p>
+                <p>Draw a budget of candidates at temperature τ, ordered by probability — the guess order. Low τ clusters on the modes; high τ reaches into the tails.</p>
+              </li>
+              <li>
+                <p class="label">04 · Score</p>
+                <p>The bundled scorer runs the candidates against the held-out split. Coverage, novelty, and the delta over baseline come only from the scorer — never self-assessed.</p>
+              </li>
+              <li>
+                <p class="label">05 · Analyse misses &amp; refine</p>
+                <p>Read the held-out passwords the candidates missed, hypothesise the structure that's missing, refine the grammar, and go round again.</p>
+              </li>
+              <li>
+                <p class="label">06 · Stop</p>
+                <p>When coverage beats the best baseline by a clear margin and gains plateau — or the iteration cap is reached, or coverage regresses twice and the best grammar is handed back.</p>
+              </li>
+            </ol>
+            <p class="label inspect__hint" aria-hidden="true"><span data-station>Station 01 / 06</span> · Scroll to inspect</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="scene scene--sandbox" id="sandbox" data-scene data-title="Sandbox" data-length="2" aria-labelledby="sandbox-title">
+        <div class="scene__body">
+          <div class="eyebrow-row">
+            <p class="label eyebrow" data-scramble>§06 · Sandbox</p>
+            <p class="label tag">Illustrative · toy data</p>
+          </div>
+          <h2 id="sandbox-title" data-scramble>A grammar from sixteen fake passwords.</h2>
+          <p class="lede">
+            A tiny corpus we invented, bundled with the page and run in your browser. Nowhere to type a password,
+            nothing sent anywhere — it illustrates <code>induce → sample</code>; it is not the engine.
+          </p>
+          <div class="sandbox" data-sandbox data-keepout>
+            <div class="sandbox__panel">
+              <h3 class="label">Toy seed · train split</h3>
+              <ul class="tokens" data-train></ul>
+              <h3 class="label">Toy held-out · never shown</h3>
+              <ul class="tokens tokens--heldout" data-heldout></ul>
+            </div>
+            <div class="sandbox__panel">
+              <h3 class="label">Grammar a model might induce</h3>
+              <ol class="templates" data-templates></ol>
+              <p class="note">Themes: <span data-themes></span>. <span class="enriched">+</span> = not in the seed: the enrichment pass.</p>
+            </div>
+            <div class="sandbox__panel">
+              <h3 class="label">Sampled · τ = 1.4</h3>
+              <ol class="candidates" data-candidates></ol>
+              <button class="btn" type="button" data-resample>Sample again</button>
+              <p class="note" data-tally></p>
+              <p class="note">This small, coverage saturates and means nothing — the real loop runs on real-sized, authorised corpora.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- The one paper scene: the field settles to stillness under it. -->
+      <section class="scene scene--paper" id="scope" data-scene data-title="Scope" data-length="2.4" data-field="still" aria-labelledby="scope-title">
+        <div class="scene__body">
+          <p class="label eyebrow" data-scramble>§07 · Scope</p>
+          <h2 id="scope-title" data-scramble>The corpus boundary is the whole line.</h2>
+          <p class="lede">
             The same machinery is defensive on a corpus and an attack on a person. Modelling how a population
-            chooses passwords helps you harden policy, plant decoys, and build test data. Pointing that
-            machinery at one individual turns distribution-modelling into an attack on them. Enigmista stays
-            on one side of that line by design.
+            chooses passwords helps you harden policy, plant decoys, and build test data. Pointing it at one
+            individual turns distribution-modelling into an attack on them. Enigmista stays on one side of that
+            line by design.
           </p>
-        </div>
-        <div class="scope">
-          <div>
-            <h3>In scope</h3>
-            <ul>
-              <li>Password-policy audits the operator is authorised to run.</li>
-              <li>Honeyword and decoy generation.</li>
-              <li>Synthetic-data creation and research.</li>
-              <li>Only from a seed corpus the operator supplies and is authorised to use — a population of passwords, not one person's.</li>
-            </ul>
+          <div class="scope">
+            <div>
+              <h3>In scope</h3>
+              <ul>
+                <li>Password-policy audits the operator is authorised to run.</li>
+                <li>Honeyword and decoy generation.</li>
+                <li>Synthetic-data creation and research.</li>
+                <li>Only from a seed corpus the operator supplies and is authorised to use — a population, not one person.</li>
+              </ul>
+            </div>
+            <div>
+              <h3>Out of scope — refused</h3>
+              <ul>
+                <li>Using a specific person's details — a name, a birthday, a pet's name — to guess their passwords.</li>
+                <li>Producing or ranking candidates aimed at an individual's accounts.</li>
+                <li>Treating one person's passwords as if they were a corpus.</li>
+              </ul>
+            </div>
           </div>
-          <div>
-            <h3>Out of scope — refused</h3>
-            <ul>
-              <li>Using a specific person's details — a name, a birthday, a pet's name — to guess their passwords.</li>
-              <li>Producing or ranking candidates aimed at an individual's accounts.</li>
-              <li>Treating one person's passwords as if they were a corpus.</li>
-            </ul>
-          </div>
-        </div>
-        <div class="prose">
           <p>
-            Asked to cross the line, Enigmista names the boundary, offers the legitimate version — model a
-            corpus you're authorised to use — and stops. Its artifacts, candidate lists and grammars, are
-            treated as sensitive: written to a local <code>./out/</code>, never anywhere shared or public.
+            Asked to cross the line, Enigmista names the boundary, offers the legitimate version — model a corpus
+            you're authorised to use — and stops. Candidate lists and grammars are treated as sensitive: written
+            to a local <code>./out/</code>, never anywhere shared or public.
           </p>
-          <p>
-            This site keeps the same rule. The sandbox uses a bundled toy list, there is no field to type a
-            password into, and there are no analytics or trackers.
-          </p>
+          <p class="label">This site keeps the same rule: a bundled toy list, no field to type a password into, no analytics, no trackers.</p>
         </div>
       </section>
 
-      <!-- §06 Install / CTA -->
-      <section class="section" id="install" aria-labelledby="install-title">
-        <p class="label">§06 · Install</p>
-        <h2 id="install-title">Run the real loop.</h2>
-        <div class="prose">
-          <p>
+      <section class="scene scene--install" id="install" data-scene data-title="Install" data-length="1.8" aria-labelledby="install-title">
+        <div class="scene__body">
+          <p class="label eyebrow" data-scramble>§08 · Install</p>
+          <h2 id="install-title" data-scramble>Run the real loop.</h2>
+          <p class="lede">
             Enigmista ships as a skill. The loop needs a runtime with a disk and script execution:
             <strong>Claude Code</strong>, <strong>Gemini CLI</strong>, or a local model on <strong>Hermes</strong>.
-            It hands back at its checkpoints — baselines first, then the first grammar, then coverage
-            against baseline after every iteration.
+            It hands back at its checkpoints — baselines first, then the first grammar, then coverage against
+            baseline after every iteration.
           </p>
-        </div>
-        <ol class="steps">
-          <li>
-            <p class="label">01 · Get the skill</p>
-            <p><a class="btn" href="#install" data-pending="skill download">Download the skill</a> <span class="pending">link pending</span></p>
-          </li>
-          <li>
-            <p class="label">02 · Install it</p>
-            <p>In Claude Code, put the <code>enigmista/</code> folder in your skills directory:</p>
-            <pre><code>~/.claude/skills/enigmista/SKILL.md</code></pre>
-            <p class="pending">Gemini CLI and Hermes install steps pending.</p>
-          </li>
-          <li>
-            <p class="label">03 · Smoke-test the scorer</p>
-            <pre><code>python3 scripts/eval_coverage.py \
+          <ol class="steps">
+            <li>
+              <p class="label">01 · Get the skill</p>
+              <p><a class="btn" href="#install" data-pending="skill download">Download the skill</a> <span class="pending">link pending</span></p>
+            </li>
+            <li>
+              <p class="label">02 · Install (Claude Code)</p>
+              <pre><code>~/.claude/skills/enigmista/SKILL.md</code></pre>
+              <p class="pending">Gemini CLI and Hermes steps pending.</p>
+            </li>
+            <li>
+              <p class="label">03 · Smoke-test the scorer</p>
+              <pre><code>python3 scripts/eval_coverage.py \
   --heldout assets/sample/normal/heldout.txt \
   --candidates assets/sample/normal/candidates.jsonl \
   --train assets/sample/normal/train.txt \
   --baseline assets/sample/normal/baseline_coverage.json \
   --out /tmp/out.json --cutoffs 5 10 100 --primary 100</code></pre>
-            <p>Expect: <code>SUMMARY: cov@100=75.0% (hit 3/4 held-out) Δbaseline=+25.0pts novelty=57.14% cands=14</code></p>
-          </li>
-          <li>
-            <p class="label">04 · Bring an authorised corpus</p>
-            <p>
-              Put your seed in <code>data/seed.txt</code> and start the loop. It hands back baselines before it
-              induces anything — that's the number to beat.
-            </p>
-          </li>
-        </ol>
-        <div class="prose">
-          <p>
-            Prefer to talk it through first? The Enigmista Gem is a conversational front-end on Gemini: it
-            reasons about the method and writes the grammar, sampler code, and scorer command for you — but it
-            can't run the loop itself, so it never reports a coverage number as measured.
-            <span class="pending">Gem link pending.</span>
+              <p class="note">Expect <code>SUMMARY: cov@100=75.0% (hit 3/4 held-out) Δbaseline=+25.0pts novelty=57.14% cands=14</code></p>
+            </li>
+            <li>
+              <p class="label">04 · Bring an authorised corpus</p>
+              <p>Put your seed in <code>data/seed.txt</code> and start the loop. Baselines come back before it induces anything — the number to beat.</p>
+            </li>
+          </ol>
+          <p class="note">
+            Prefer to talk it through first? The Enigmista Gem on Gemini reasons about the method and writes the
+            grammar, sampler code, and scorer command — but can't run the loop, so it never reports coverage as
+            measured. <span class="pending">Gem link pending.</span>
           </p>
-          <p><a class="btn" href="#install" data-pending="method docs">Read the method</a> <span class="pending">link pending</span></p>
+          <p class="colophon label muted">
+            Authorised, defensive research · No analytics, no trackers ·
+            <a href="https://github.com/Samuele95/enigmista">Source</a> · <span data-build>build —</span>
+          </p>
         </div>
       </section>
     </main>
 
-    <footer class="colophon">
-      <p class="label muted">Enigmista — authorised, defensive research. No analytics, no trackers.</p>
-      <p class="label muted">
-        <a href="https://github.com/Samuele95/enigmista">Source</a> · <span data-build>build —</span>
-      </p>
-    </footer>
+    <div class="track" data-track aria-hidden="true"></div>
 
     <script type="module" src="/src/main.js"></script>
   </body>

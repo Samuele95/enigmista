@@ -30,9 +30,11 @@ export class SamplingSim {
     this.ambientPerTick = Math.max(2, Math.round((cols * rows) / 300));
   }
 
-  /** Document-cell rects ({x0, y0, x1, y1}, inclusive) where text sits: no lanes, no ambient. */
+  /** Document-cell rects ({x0, y0, x1, y1}, inclusive) where text sits: no lanes, no ambient.
+   *  Lanes already sitting under new text are dropped so it never reads over glyphs. */
   setKeepOut(rects) {
     this.keepOut = rects;
+    this.lanes = this.lanes.filter((l) => !this.blocked(l.x, l.y, l.chars.length));
   }
 
   blocked(x, y, len = 1) {
