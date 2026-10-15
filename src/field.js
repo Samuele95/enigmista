@@ -1,9 +1,9 @@
 import {
-  CanvasTexture, DataTexture, LinearFilter, Mesh, NearestFilter, OrthographicCamera,
-  PlaneGeometry, RGBAFormat, Scene, ShaderMaterial, Vector2, WebGLRenderer,
+  DataTexture, Mesh, NearestFilter, OrthographicCamera, PlaneGeometry, RGBAFormat, Scene, ShaderMaterial,
+  Vector2, WebGLRenderer,
 } from 'three';
 import fragmentShader from './shaders/field.frag?raw';
-import { CHARSET } from './glyphs.js';
+import { buildAtlas } from './atlas.js';
 import { SamplingSim } from './sampling-sim.js';
 
 const vertexShader = /* glsl */ `
@@ -16,7 +16,6 @@ const vertexShader = /* glsl */ `
 
 const MAX_PIXEL_RATIO = 1.5;
 const TICK_MS = 1000 / 24; // film cadence for the sim; scroll offset still updates every frame
-const ATLAS = { cols: 16, cellH: 72, font: '400 44px "Martian Mono"' };
 const PREWARM_TICKS = 24; // ~1 s, so the field never opens empty
 
 // Text the field never runs behind. Panels that hold their own content opt in with data-keepout.
@@ -29,32 +28,6 @@ const KEEP_OUT = {
 
 // Display cell height in CSS px; width follows the font's measured advance.
 const cellHeightCss = () => (window.innerWidth < 700 ? 19 : 22);
-
-async function buildAtlas() {
-  await document.fonts.load(ATLAS.font);
-  const rows = Math.ceil(CHARSET.length / ATLAS.cols);
-  const canvas = document.createElement('canvas');
-  canvas.height = rows * ATLAS.cellH;
-  const ctx = canvas.getContext('2d');
-  ctx.font = ATLAS.font;
-  const cellW = Math.ceil(ctx.measureText('M').width * 1.08); // tracking of a real string
-  canvas.width = ATLAS.cols * cellW;
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#fff';
-  ctx.font = ATLAS.font; // resizing the canvas reset the context state
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  [...CHARSET].forEach((ch, i) => {
-    const x = (i % ATLAS.cols) * cellW + cellW / 2;
-    const y = Math.floor(i / ATLAS.cols) * ATLAS.cellH + ATLAS.cellH / 2;
-    ctx.fillText(ch, x, y);
-  });
-  const texture = new CanvasTexture(canvas);
-  texture.minFilter = LinearFilter;
-  texture.generateMipmaps = false;
-  return { texture, grid: new Vector2(ATLAS.cols, rows), aspect: cellW / ATLAS.cellH };
-}
 
 // Keep-out rects in field (document) cell coordinates, padded by one cell.
 function keepOutRects(selector, offset, cw, ch) {
@@ -87,12 +60,15 @@ function stillness() {
  * mode 'doc':   the field scrolls with the document and reads stillness from [data-field="still"].
  * mode 'stage': the stage drives it — setTravel(px, {still, covered}) moves the camera through the
  *               glyph world and says when to settle; refreshKeepOut() after a scene change.
+ * attachWorld(world) adds a 3D scene rendered over the field in the same context; while it is
+ * attached and visible the loop renders every frame (the sim itself still ticks at 24 fps).
  * Resolves once the first frame is drawn (the boot sequence waits on it).
  */
 export async function startField(canvas, { reducedMotion, mode = 'doc' }) {
-  const renderer = new WebGLRenderer({ canvas, antialias: false, powerPreference: 'low-power' });
+  const renderer = new WebGLRenderer({ canvas, antialias: true, powerPreference: 'default' });
   const pixelRatio = Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO);
   renderer.setPixelRatio(pixelRatio);
+  renderer.autoClear = false;
 
   const atlas = await buildAtlas();
   const uniforms = {
@@ -114,14 +90,23 @@ export async function startField(canvas, { reducedMotion, mode = 'doc' }) {
   let cw;
   let ch;
   let travel = 0;
+  let world = null;
   let external = { still: false, covered: false };
   const offset = () => (mode === 'stage' ? travel : window.scrollY);
   const refreshKeepOut = () => sim && sim.setKeepOut(keepOutRects(KEEP_OUT[mode], offset(), cw, ch));
 
-  const draw = () => {
+  const upload = () => {
     sim.write(cells.image.data);
     cells.needsUpdate = true;
+  };
+  const render = (ms = performance.now()) => {
+    renderer.clear();
     renderer.render(scene, camera);
+    if (world) {
+      world.update(ms);
+      renderer.clearDepth();
+      world.render(renderer);
+    }
   };
 
   // Returns true when the visible window moved.
@@ -156,25 +141,35 @@ export async function startField(canvas, { reducedMotion, mode = 'doc' }) {
     syncScroll();
     // Reduced motion gets a settled still; otherwise ~1 s of history so it never opens empty.
     if (fresh) for (let i = reducedMotion ? 90 : PREWARM_TICKS; i > 0; i--) sim.step();
-    draw();
+    world?.resize(window.innerWidth, window.innerHeight);
+    upload();
+    render();
   };
 
   window.addEventListener('resize', layout);
   if (mode === 'doc') new ResizeObserver(refreshKeepOut).observe(document.body);
   layout();
   // ?debug exposes the sim for inspection in the console.
-  if (new URLSearchParams(window.location.search).has('debug')) window.__field = { sim: () => sim, cw: () => cw, ch: () => ch, offset };
+  if (new URLSearchParams(window.location.search).has('debug')) {
+    window.__field = { sim: () => sim, cw: () => cw, ch: () => ch, offset, world: () => world };
+  }
   const controller = {
+    atlas,
     refreshKeepOut,
     setTravel(px, state) {
       travel = px;
       external = state;
     },
+    attachWorld(w) {
+      world = w;
+      world.resize(window.innerWidth, window.innerHeight);
+      render();
+    },
   };
 
   if (reducedMotion) {
     // No animation: the settled still only follows the page as it scrolls.
-    window.addEventListener('scroll', () => syncScroll() && !stillness().covered && draw(), { passive: true });
+    window.addEventListener('scroll', () => syncScroll() && !stillness().covered && (upload(), render()), { passive: true });
     return controller;
   }
 
@@ -191,7 +186,9 @@ export async function startField(canvas, { reducedMotion, mode = 'doc' }) {
       sim.step();
       dirty = true;
     }
-    if (dirty && !covered) draw();
+    if (covered) return; // hidden behind an opaque scene: no GPU work at all
+    if (dirty) upload();
+    if (dirty || world) render(ms);
   };
   // The loop stops entirely while the tab is hidden.
   const sync = () => {

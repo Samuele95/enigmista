@@ -165,7 +165,29 @@ button {
 }
 
 .scene--hero .lede {
-  max-width: 34rem;
+  max-width: 40rem;
+}
+
+/* Where the Rotor sits in the hero shot (the world fits itself to this box). */
+.rotor-slot {
+  width: min(100%, 46rem);
+  height: clamp(170px, 34vh, 330px);
+}
+
+.is-stage .hero-gloss {
+  display: none;
+}
+
+.is-calm .rotor-slot {
+  display: none;
+}
+
+.is-stage .scene--hero .scene__body {
+  gap: 1rem;
+}
+
+.is-stage .scene--hero .wordmark {
+  font-size: clamp(3.25rem, 8.5vw, 6.75rem);
 }
 
 .scene--hero .btn {
@@ -511,6 +533,15 @@ button {
 
   .is-stage .scene--hero {
     --win-left: calc(var(--frame) + 5rem);
+  }
+
+  /* Text-led shots keep a column; the right third of the frame is the Rotor's stage. */
+  .is-stage :is(#structure, #uses, #objective, #install) .scene__body {
+    max-width: min(42rem, 54vw);
+  }
+
+  .is-stage #method :is(h2, .lede) {
+    max-width: min(44rem, 56vw);
   }
 }
 

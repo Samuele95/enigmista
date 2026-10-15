@@ -15,7 +15,7 @@ const ease = (t) => 1 - (1 - t) ** 3;
 const clamp01 = (t) => Math.min(1, Math.max(0, t));
 const pad2 = (n) => String(n).padStart(2, '0');
 
-export function startStage({ field } = {}) {
+export function startStage({ field, world } = {}) {
   const scenes = [...document.querySelectorAll('[data-scene]')].map((el) => {
     // Each shot's content sits in a window bounded by the HUD bars; tall content scrolls inside it.
     const body = el.querySelector('.scene__body');
@@ -154,6 +154,24 @@ export function startStage({ field } = {}) {
       station.textContent = `Station ${pad2(Math.min(n, 1 + Math.floor(method.local * n)))} / ${pad2(n)}`;
     }
 
+    // The world's camera: whole numbers at rest on a shot, fractions while travelling between.
+    let chapter = scenes.length - 1;
+    let local = scenes[chapter].local;
+    for (let i = 0; i < scenes.length; i++) {
+      const [a, b] = rest(scenes[i]);
+      if (p > b && i < scenes.length - 1) continue;
+      if (p >= a || i === 0) {
+        chapter = i;
+        local = scenes[i].local;
+      } else {
+        const prevEnd = rest(scenes[i - 1])[1];
+        chapter = i - 1 + clamp01((p - prevEnd) / (a - prevEnd));
+        local = scenes[i - 1].local;
+      }
+      break;
+    }
+    world?.setChapter(chapter, local);
+
     bar.style.transform = `scaleX(${clamp01(p / pMax)})`;
     const scope = scenes.find((s) => s.still);
     const scopeVis = scope ? clamp01(Math.min((p - scope.start) / ENTER, (scope.end - p) / ENTER)) : 0;
@@ -163,6 +181,11 @@ export function startStage({ field } = {}) {
   // Snap: when scrolling settles inside a transit, glide to the nearest resting shot.
   let idle = 0;
   const snap = () => {
+    // Never snap mid-glide (a PREV/NEXT jump or wheel inertia): wait until Lenis has settled.
+    if (lenis.isScrolling) {
+      idle = setTimeout(snap, SNAP_IDLE_MS);
+      return;
+    }
     field?.refreshKeepOut();
     const p = window.scrollY / vh();
     if (scenes.some((s) => {
@@ -194,5 +217,9 @@ export function startStage({ field } = {}) {
   const fromHash = scenes.findIndex((s) => `#${s.el.id}` === window.location.hash);
   if (fromHash > 0) lenis.scrollTo(rest(scenes[fromHash])[0] * vh(), { immediate: true });
   render();
+  // ?debug: jump straight to a scene's resting shot (for deterministic checks).
+  if (new URLSearchParams(window.location.search).has('debug')) {
+    window.__stage = { goTo, jump: (i) => lenis.scrollTo(rest(scenes[i])[0] * vh(), { immediate: true, force: true }) };
+  }
   return { goTo };
 }
