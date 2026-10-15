@@ -11,17 +11,10 @@ const LOCK_STAGGER_MS = 70;
 
 export function runBoot(tasks) {
   const root = document.querySelector('[data-boot]');
-  const rotors = [...WORD].map(() => {
-    const el = document.createElement('span');
-    el.className = 'rotor';
-    root.querySelector('[data-rotors]').append(el);
-    return el;
-  });
-  const cells = [...WORD].map(() => {
-    const el = document.createElement('i');
-    root.querySelector('[data-cells]').append(el);
-    return el;
-  });
+  // The rotors, cells and first log line ship as static HTML, so the boot screen paints with the
+  // first frame (it is the page's largest early paint) instead of waiting on this script.
+  const rotors = [...root.querySelectorAll('[data-rotors] .rotor')];
+  const cells = [...root.querySelectorAll('[data-cells] i')];
   const pct = root.querySelector('[data-pct]');
   const log = root.querySelector('[data-log]');
   const skip = root.querySelector('[data-skip]');
@@ -36,7 +29,6 @@ export function runBoot(tasks) {
     li.textContent = `› ${text}`;
     log.append(li);
   };
-  line('scope: authorised corpora only');
 
   return new Promise((resolve) => {
     const finish = () => {
