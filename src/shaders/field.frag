@@ -56,6 +56,5 @@ void main() {
   float flicker = 0.85 + 0.15 * hash(cell + floor(uTime * 12.0));
   col += tint * ink * level * flicker;
 
-  col += (hash(gl_FragCoord.xy + uTime) - 0.5) * 0.012; // grain
   gl_FragColor = vec4(col, 1.0);
 }

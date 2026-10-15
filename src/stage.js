@@ -23,7 +23,7 @@ export function startStage({ field, world } = {}) {
     win.className = 'scene__window';
     body.replaceWith(win);
     win.append(body);
-    return { el, body, win, ...meta(el) };
+    return { el, body, win, parts: [...body.children], ...meta(el) };
   });
   function meta(el) {
     return {
@@ -77,6 +77,13 @@ export function startStage({ field, world } = {}) {
 
   let active = -1;
   let remeasure = 0;
+  // Hero reveal: the HUD draws in and the hero's lines rise once the Rotor has started its dolly.
+  const reveal = { t0: performance.now(), lead: 650, dur: 1500 };
+  const revealT = () => clamp01((performance.now() - reveal.t0 - reveal.lead) / reveal.dur);
+  document.documentElement.classList.add('is-revealing');
+  setTimeout(() => document.documentElement.classList.replace('is-revealing', 'is-revealed'), reveal.lead + reveal.dur + 900);
+  world?.reveal();
+  const motion = { p: window.scrollY / vh(), t: performance.now(), velocity: 0, transit: 0 };
   const goTo = (i) => {
     const target = scenes[Math.max(0, Math.min(scenes.length - 1, i))];
     lenis.scrollTo(rest(target)[0] * vh(), { duration: 1.6, easing: (t) => 1 - (1 - t) ** 4 });
@@ -116,13 +123,21 @@ export function startStage({ field, world } = {}) {
     let best = 0;
     let bestVis = -1;
     scenes.forEach((s, i) => {
-      const vis = clamp01(Math.min((p - s.start) / ENTER, (s.end - p) / ENTER));
+      let vis = clamp01(Math.min((p - s.start) / ENTER, (s.end - p) / ENTER));
+      if (i === 0) vis = Math.min(vis, revealT());
       const entering = p < (s.start + s.end) / 2;
       const e = ease(vis);
-      s.el.style.opacity = e;
+      s.el.style.opacity = vis > 0 ? 1 : 0;
       s.el.style.visibility = vis > 0 ? 'visible' : 'hidden';
-      s.el.style.setProperty('--shift', `${(1 - e) * (entering ? 7 : -7)}vh`);
+      s.el.style.setProperty('--shift', `${(1 - e) * (entering ? 3 : -3)}vh`);
       if (s.still) s.el.style.setProperty('--paper', e);
+      // Staggered entrance: eyebrow, then headline, then the rest, each rising into place.
+      const span = Math.min(0.55, (s.parts.length - 1) * 0.07);
+      s.parts.forEach((part, k) => {
+        const ck = ease(clamp01((vis - (entering ? k : s.parts.length - 1 - k) * 0.07) / (1 - span)));
+        part.style.opacity = ck;
+        part.style.transform = ck < 1 ? `translateY(${(1 - ck) * (entering ? 26 : -16)}px)` : '';
+      });
       // Long scenes scroll their own body while holding.
       const [r0, r1] = rest(s);
       const t = r1 > r0 ? clamp01((p - r0) / (r1 - r0)) : 0;
@@ -170,12 +185,17 @@ export function startStage({ field, world } = {}) {
       }
       break;
     }
-    world?.setChapter(chapter, local);
+    motion.transit = Math.sin(Math.PI * (chapter % 1));
+    world?.setChapter(chapter, local, motion);
 
     bar.style.transform = `scaleX(${clamp01(p / pMax)})`;
     const scope = scenes.find((s) => s.still);
     const scopeVis = scope ? clamp01(Math.min((p - scope.start) / ENTER, (scope.end - p) / ENTER)) : 0;
-    field?.setTravel(window.scrollY * TRAVEL, { still: scenes[best].still, covered: scopeVis >= 1 });
+    field?.setTravel(window.scrollY * TRAVEL, {
+      still: scenes[best].still,
+      covered: scopeVis >= 1,
+      glitch: Math.min(1, motion.transit * 0.55 + Math.abs(motion.velocity) * 0.12),
+    });
   };
 
   // Snap: when scrolling settles inside a transit, glide to the nearest resting shot.
@@ -204,6 +224,13 @@ export function startStage({ field, world } = {}) {
 
   const raf = (time) => {
     lenis.raf(time);
+    // Scroll velocity (viewports/s), smoothed and decaying when the page is still.
+    const p = window.scrollY / vh();
+    const dt = Math.max(1, time - motion.t) / 1000;
+    motion.velocity += ((p - motion.p) / dt - motion.velocity) * 0.15;
+    motion.p = p;
+    motion.t = time;
+    if (revealT() < 1 || Math.abs(motion.velocity) > 0.01) render();
     requestAnimationFrame(raf);
   };
   requestAnimationFrame(raf);

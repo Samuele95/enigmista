@@ -535,13 +535,15 @@ button {
     --win-left: calc(var(--frame) + 5rem);
   }
 
-  /* Text-led shots keep a column; the right third of the frame is the Rotor's stage. */
-  .is-stage :is(#structure, #uses, #objective, #install) .scene__body {
-    max-width: min(42rem, 54vw);
+  /* Text-led shots keep a column computed from the Rotor's anchor, so the two never overlap. */
+  .is-stage .scene {
+    --anchor-w: clamp(260px, 30vw, 560px);
+    --text-w: calc(100vw - var(--win-left) - var(--win-right) - var(--anchor-w) - 2.5rem);
   }
 
-  .is-stage #method :is(h2, .lede) {
-    max-width: min(44rem, 56vw);
+  .is-stage :is(#structure, #uses, #objective, #install) .scene__body,
+  .is-stage :is(#method, #sandbox) :is(h2, .lede) {
+    max-width: var(--text-w);
   }
 }
 
@@ -830,3 +832,176 @@ button {
     display: none;
   }
 }
+
+/* ── The Rotor's places in each shot ──────────────────── */
+.rotor-anchor {
+  display: none;
+}
+
+.is-stage .rotor-anchor {
+  display: block;
+  position: absolute;
+  pointer-events: none;
+  top: var(--win-top);
+  bottom: var(--win-bottom);
+  right: var(--win-right);
+  width: var(--anchor-w, 34%);
+}
+
+@media (min-width: 1000px) {
+  .is-stage #uses .rotor-anchor {
+    bottom: auto;
+    height: 58%;
+  }
+
+  .is-stage #method .rotor-anchor {
+    bottom: auto;
+    height: 38%;
+  }
+
+  .is-stage #sandbox .rotor-anchor {
+    bottom: auto;
+    height: 26%;
+  }
+}
+
+/* Narrow: the Rotor gets a band above the text, and the text window starts below it. */
+@media (max-width: 999px) {
+  .is-stage .rotor-anchor {
+    left: var(--win-left);
+    width: auto;
+    bottom: auto;
+    height: 22vh;
+  }
+
+  .is-stage .scene:has(> .rotor-anchor) {
+    --win-top: calc(var(--frame) + 4.25rem + 22vh);
+  }
+
+  .is-stage .scene:has(> .rotor-anchor) .rotor-anchor {
+    top: calc(var(--frame) + 4rem);
+  }
+}
+
+/* Labels projected from the 3D world into the page. */
+.world-labels {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.is-calm .world-labels {
+  display: none;
+}
+
+.world-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ember);
+  will-change: transform, opacity;
+}
+
+.world-label--slot {
+  padding: 0.25em 0.5em;
+  border: 1px solid color-mix(in srgb, var(--ember) 45%, transparent);
+  background: color-mix(in srgb, var(--void) 70%, transparent);
+}
+
+.world-label--use {
+  transition: color 0.3s;
+}
+
+.world-label--use.is-hi {
+  color: var(--bone);
+}
+
+.world-label--readout,
+.world-label--station {
+  color: var(--ash);
+}
+
+.uses > li {
+  transition: border-color 0.3s;
+}
+
+.uses > li:hover,
+.uses > li:focus-within {
+  border-top-color: var(--ember);
+}
+
+.candidates .is-current {
+  color: var(--bone);
+  background: color-mix(in srgb, var(--ember) 18%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--ember) 50%, transparent);
+}
+
+.candidates .is-current.is-hit {
+  color: var(--heldout);
+}
+
+.is-over-rotor .scene {
+  cursor: pointer;
+}
+
+/* ── Reveal: the HUD draws itself in after the boot ───── */
+@keyframes hud-frame-in {
+  from {
+    opacity: 0;
+    transform: scale(1.025);
+  }
+}
+
+@keyframes hud-drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+
+@keyframes hud-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes hud-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+
+.is-revealing .hud__frame {
+  animation: hud-frame-in 1.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+}
+
+.is-revealing .hud__top {
+  animation: hud-drop-in 1s cubic-bezier(0.16, 1, 0.3, 1) 0.9s both;
+}
+
+.is-revealing .hud__bottom {
+  animation: hud-rise-in 1s cubic-bezier(0.16, 1, 0.3, 1) 1.1s both;
+}
+
+.is-revealing .hud__rail li {
+  animation: hud-slide-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.is-revealing .hud__rail li:nth-child(1) { animation-delay: 1.2s; }
+.is-revealing .hud__rail li:nth-child(2) { animation-delay: 1.26s; }
+.is-revealing .hud__rail li:nth-child(3) { animation-delay: 1.32s; }
+.is-revealing .hud__rail li:nth-child(4) { animation-delay: 1.38s; }
+.is-revealing .hud__rail li:nth-child(5) { animation-delay: 1.44s; }
+.is-revealing .hud__rail li:nth-child(6) { animation-delay: 1.5s; }
+.is-revealing .hud__rail li:nth-child(7) { animation-delay: 1.56s; }
+.is-revealing .hud__rail li:nth-child(8) { animation-delay: 1.62s; }

@@ -4,6 +4,7 @@ import {
 } from 'three';
 import fragmentShader from './shaders/field.frag?raw';
 import { buildAtlas } from './atlas.js';
+import { createPost } from './post.js';
 import { SamplingSim } from './sampling-sim.js';
 
 const vertexShader = /* glsl */ `
@@ -22,7 +23,7 @@ const PREWARM_TICKS = 24; // ~1 s, so the field never opens empty
 // On the stage only the active scene and the HUD chrome count; in the document, all of main.
 const TEXT = ':is(h1, h2, h3, p, li, pre, dt, dd, blockquote, figcaption, a, button)';
 const KEEP_OUT = {
-  stage: `.scene.is-active ${TEXT}, .scene.is-active [data-keepout], [data-hud] ${TEXT}`,
+  stage: `.scene.is-active ${TEXT}, .scene.is-active [data-keepout], [data-hud] ${TEXT}`, // incl. the Rotor's anchor
   doc: `main ${TEXT}, [data-keepout]`,
 };
 
@@ -84,6 +85,8 @@ export async function startField(canvas, { reducedMotion, mode = 'doc' }) {
   const scene = new Scene();
   scene.add(new Mesh(new PlaneGeometry(2, 2), new ShaderMaterial({ vertexShader, fragmentShader, uniforms })));
   const camera = new OrthographicCamera();
+  // The stage gets the full chain (bloom, grain, glitch); the calm still renders plainly.
+  const post = mode === 'stage' && !reducedMotion ? createPost(renderer, scene, camera) : null;
 
   let sim;
   let cells;
@@ -100,10 +103,11 @@ export async function startField(canvas, { reducedMotion, mode = 'doc' }) {
     cells.needsUpdate = true;
   };
   const render = (ms = performance.now()) => {
+    world?.update(ms);
+    if (post) return post.render(ms);
     renderer.clear();
     renderer.render(scene, camera);
     if (world) {
-      world.update(ms);
       renderer.clearDepth();
       world.render(renderer);
     }
@@ -142,6 +146,7 @@ export async function startField(canvas, { reducedMotion, mode = 'doc' }) {
     // Reduced motion gets a settled still; otherwise ~1 s of history so it never opens empty.
     if (fresh) for (let i = reducedMotion ? 90 : PREWARM_TICKS; i > 0; i--) sim.step();
     world?.resize(window.innerWidth, window.innerHeight);
+    post?.setSize(window.innerWidth, window.innerHeight, pixelRatio);
     upload();
     render();
   };
@@ -151,7 +156,16 @@ export async function startField(canvas, { reducedMotion, mode = 'doc' }) {
   layout();
   // ?debug exposes the sim for inspection in the console.
   if (new URLSearchParams(window.location.search).has('debug')) {
-    window.__field = { sim: () => sim, cw: () => cw, ch: () => ch, offset, world: () => world };
+    window.__field = {
+      sim: () => sim, cw: () => cw, ch: () => ch, offset, world: () => world,
+      // Force n frames now (the in-app browser starves rAF; this makes checks deterministic).
+      frames: (n = 30, stepMs = 33) => {
+        // A monotonic debug clock, so repeated calls keep simulated time moving forward.
+        let t = Math.max(window.__field.clock ?? 0, performance.now());
+        for (let i = 0; i < n; i++) render((t += stepMs));
+        window.__field.clock = t;
+      },
+    };
   }
   const controller = {
     atlas,
@@ -159,9 +173,11 @@ export async function startField(canvas, { reducedMotion, mode = 'doc' }) {
     setTravel(px, state) {
       travel = px;
       external = state;
+      post?.setGlitch(state.glitch ?? 0);
     },
     attachWorld(w) {
       world = w;
+      post?.setWorld(w);
       world.resize(window.innerWidth, window.innerHeight);
       render();
     },

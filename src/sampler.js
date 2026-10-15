@@ -15,7 +15,8 @@ function pick(weights, tau, rng) {
 // Character class of each slot drives what the scramble cycles through.
 const SLOT_CLASS = { W: 'lower', Wc: 'lower', Y: 'digit', D: 'digit', DD: 'digit', S: 'symbol' };
 
-/** Returns { pw, template, chars: [{ ch, cls }] } — cls is the scramble class per character. */
+/** Returns { pw, template, chars: [{ ch, cls, slot }] } — cls is the scramble class per character,
+ *  slot the grammar slot it was drawn from (a literal separator's slot is the literal itself). */
 export function sample(grammar, { tau = 1.4, rng = Math.random } = {}) {
   const templates = Object.fromEntries(grammar.templates.map((t) => [t.id, t.p]));
   const templateId = pick(templates, tau, rng);
@@ -23,14 +24,14 @@ export function sample(grammar, { tau = 1.4, rng = Math.random } = {}) {
   const chars = [];
   for (const slot of template.pattern) {
     if (!(slot in SLOT_CLASS)) {
-      chars.push({ ch: slot, cls: 'symbol' }); // literal separator
+      chars.push({ ch: slot, cls: 'symbol', slot }); // literal separator
       continue;
     }
     let text = pick(grammar.slots[slot === 'Wc' ? 'W' : slot], tau, rng);
     if (slot === 'Wc') text = text[0].toUpperCase() + text.slice(1);
     [...text].forEach((ch, i) => {
       const cls = slot === 'Wc' && i === 0 ? 'upper' : SLOT_CLASS[slot];
-      chars.push({ ch, cls });
+      chars.push({ ch, cls, slot });
     });
   }
   return { pw: chars.map((c) => c.ch).join(''), template: template.id, chars };
