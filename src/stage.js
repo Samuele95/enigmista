@@ -28,28 +28,41 @@ export function startStage({ field, world } = {}) {
   function meta(el) {
     return {
     title: el.dataset.title,
-    length: Number(el.dataset.length),
+    designed: Number(el.dataset.length),
     still: el.dataset.field === 'still',
     shown: false,
     };
   }
 
   // Timeline in viewport heights. The first scene starts already entered; the last never exits.
-  let cursor = -ENTER;
-  for (const s of scenes) {
-    s.start = cursor;
-    s.end = cursor + s.length;
-    cursor = s.end;
-  }
-  const pMax = cursor - ENTER;
-  const rest = (s) => [Math.max(0, s.start + ENTER), Math.min(pMax, s.end - ENTER)];
-
+  // A shot holds for at least its designed length, and long enough that tall content scrolls
+  // through its window at 1:1 with the visitor's scroll (phones stack the sandbox very tall).
   const track = document.querySelector('[data-track]');
   const vh = () => window.innerHeight;
-  const sizeTrack = () => {
+  let pMax = 0;
+  const layoutTimeline = () => {
+    let cursor = -ENTER;
+    for (const s of scenes) {
+      const overflow = Math.max(0, s.body.offsetHeight - s.win.clientHeight) / vh();
+      s.length = Math.max(s.designed, overflow + 2 * ENTER + 0.5);
+      s.start = cursor;
+      s.end = cursor + s.length;
+      cursor = s.end;
+    }
+    pMax = cursor - ENTER;
     track.style.height = `${pMax * vh() + vh()}px`;
   };
-  sizeTrack();
+  const rest = (s) => [Math.max(0, s.start + ENTER), Math.min(pMax, s.end - ENTER)];
+  layoutTimeline();
+  let relayout = 0;
+  const content = new ResizeObserver(() => {
+    clearTimeout(relayout);
+    relayout = setTimeout(() => {
+      layoutTimeline();
+      render();
+    }, 200);
+  });
+  scenes.forEach((s) => content.observe(s.body));
 
   // HUD
   const rail = document.querySelector('[data-rail]');
@@ -73,12 +86,13 @@ export function startStage({ field, world } = {}) {
   const station = document.querySelector('[data-station]');
   const inspectTrack = document.querySelector('[data-inspect-track]');
 
-  const lenis = new Lenis({ lerp: 0.085, wheelMultiplier: 0.85 });
+  // Unhurried scrolling: heavier smoothing, and each wheel notch / swipe travels less.
+  const lenis = new Lenis({ lerp: 0.055, wheelMultiplier: 0.5, touchMultiplier: 0.75 });
 
   let active = -1;
   let remeasure = 0;
   // Hero reveal: the HUD draws in and the hero's lines rise once the Rotor has started its dolly.
-  const reveal = { t0: performance.now(), lead: 650, dur: 1500 };
+  const reveal = { t0: performance.now(), lead: 1300, dur: 2600 };
   const revealT = () => clamp01((performance.now() - reveal.t0 - reveal.lead) / reveal.dur);
   document.documentElement.classList.add('is-revealing');
   setTimeout(() => document.documentElement.classList.replace('is-revealing', 'is-revealed'), reveal.lead + reveal.dur + 900);
@@ -86,7 +100,7 @@ export function startStage({ field, world } = {}) {
   const motion = { p: window.scrollY / vh(), t: performance.now(), velocity: 0, transit: 0 };
   const goTo = (i) => {
     const target = scenes[Math.max(0, Math.min(scenes.length - 1, i))];
-    lenis.scrollTo(rest(target)[0] * vh(), { duration: 1.6, easing: (t) => 1 - (1 - t) ** 4 });
+    lenis.scrollTo(rest(target)[0] * vh(), { duration: 2.6, easing: (t) => 1 - (1 - t) ** 4 });
   };
   document.querySelectorAll('[data-next]').forEach((b) => b.addEventListener('click', () => goTo(active + 1)));
   document.querySelectorAll('[data-prev]').forEach((b) => b.addEventListener('click', () => goTo(active - 1)));
@@ -111,6 +125,7 @@ export function startStage({ field, world } = {}) {
     hudChapter.textContent = `§${pad2(i + 1)} · ${scenes[i].title}`;
     scrambleIn(hudChapter, { duration: 500 });
     count.textContent = `${pad2(i + 1)} / ${pad2(scenes.length)}`;
+    window.dispatchEvent(new CustomEvent('stage:scene', { detail: scenes[i].el.id }));
     document.documentElement.dataset.tone = scenes[i].still ? 'paper' : 'dark';
     field?.refreshKeepOut();
     // Re-measure once the headline has finished deciphering (scrambled glyph widths vary).
@@ -148,7 +163,7 @@ export function startStage({ field, world } = {}) {
       if (vis > 0.55 && !s.shown) {
         s.shown = true;
         s.el.querySelectorAll('[data-scramble]').forEach((el, k) =>
-          scrambleIn(el, { delay: k * 90, duration: el.matches('h1 *') ? 1100 : 650 }),
+          scrambleIn(el, { delay: k * 120, duration: el.matches('h1 *') ? 1900 : 900 }),
         );
       } else if (vis === 0) {
         s.shown = false;
@@ -214,7 +229,7 @@ export function startStage({ field, world } = {}) {
     })) return;
     const targets = scenes.flatMap(rest);
     const nearest = targets.reduce((a, b) => (Math.abs(b - p) < Math.abs(a - p) ? b : a));
-    lenis.scrollTo(nearest * vh(), { duration: 0.9, easing: (t) => 1 - (1 - t) ** 3 });
+    lenis.scrollTo(nearest * vh(), { duration: 1.5, easing: (t) => 1 - (1 - t) ** 3 });
   };
   lenis.on('scroll', () => {
     render();
@@ -239,7 +254,7 @@ export function startStage({ field, world } = {}) {
   requestAnimationFrame(raf);
 
   window.addEventListener('resize', () => {
-    sizeTrack();
+    layoutTimeline();
     render();
   });
 
@@ -249,7 +264,12 @@ export function startStage({ field, world } = {}) {
   render();
   // ?debug: jump straight to a scene's resting shot (for deterministic checks).
   if (new URLSearchParams(window.location.search).has('debug')) {
-    window.__stage = { goTo, jump: (i) => lenis.scrollTo(rest(scenes[i])[0] * vh(), { immediate: true, force: true }) };
+    window.__stage = {
+      goTo,
+      lenis,
+      rest: (i) => rest(scenes[i]),
+      jump: (i) => lenis.scrollTo(rest(scenes[i])[0] * vh(), { immediate: true, force: true }),
+    };
   }
   return { goTo };
 }

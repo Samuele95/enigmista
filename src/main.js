@@ -27,7 +27,28 @@ document.querySelectorAll('[data-mode-toggle]').forEach((b) =>
   }),
 );
 
-const sandboxReady = Promise.resolve().then(() => mountSandbox(document.querySelector('[data-sandbox]')));
+// On the stage the induction plays the first time its panels are actually on screen in the sandbox
+// shot (on short screens they sit below the headline until the visitor scrolls); calm shows the
+// final state at once.
+const sandboxReady = Promise.resolve().then(() => {
+  const root = document.querySelector('[data-sandbox]');
+  const sandbox = mountSandbox(root, { instant: !staged || reducedMotion });
+  let here = false;
+  let seen = false;
+  const maybePlay = () => here && seen && !sandbox.played() && sandbox.play();
+  window.addEventListener('stage:scene', (e) => {
+    here = e.detail === 'sandbox';
+    maybePlay();
+  });
+  new IntersectionObserver(
+    ([entry]) => {
+      seen = entry.intersectionRatio > 0.45 || entry.intersectionRect.height > window.innerHeight * 0.4;
+      maybePlay();
+    },
+    { threshold: Array.from({ length: 21 }, (_, i) => i / 20) },
+  ).observe(root);
+  return sandbox;
+});
 const fontsReady = document.fonts.ready;
 const fieldModule = import('./field.js');
 const fieldReady = fieldModule.then(({ startField }) =>

@@ -476,14 +476,14 @@ export function createWorld({ atlas }) {
   let current = null; // the word on the drum (or being spun to)
   let queue = []; // sandbox draws waiting to be shown
   const tally = { drawn: 0, hits: new Set() };
-  const intro = { active: false, t0: 0, dur: 2600 };
+  const intro = { active: false, t0: 0, dur: 4200 };
 
   const centred = (chars) => {
     const pad = Math.floor((RINGS - chars.length) / 2);
     return Array.from({ length: RINGS }, (_, i) => chars[i - pad] ?? { ch: ' ', slot: ' ' });
   };
 
-  const spinTo = (word, now, { chars, fast = false } = {}) => {
+  const spinTo = (word, now, { chars, fast = false, slow = false } = {}) => {
     current = word;
     hit = TOY_HELDOUT.has(word);
     const cells = centred(chars ?? [...word].map((ch) => ({ ch, slot: 'name' })));
@@ -495,8 +495,8 @@ export function createWorld({ atlas }) {
       const rest = (((ring.angle - base) % TAU) + TAU) % TAU;
       ring.from = ring.angle;
       ring.to = ring.angle - turns * TAU - rest;
-      ring.t0 = now + i * (fast ? 40 : 85) + Math.random() * (fast ? 50 : 120);
-      ring.dur = fast ? 520 + Math.random() * 200 : 1250 + Math.random() * 450;
+      ring.t0 = now + i * (fast ? 40 : slow ? 150 : 85) + Math.random() * (fast ? 50 : 120);
+      ring.dur = fast ? 520 + Math.random() * 200 : slow ? 2100 + Math.random() * 500 : 1250 + Math.random() * 450;
       ring.slot = slot;
       ringState[i] = 0;
     });
@@ -510,6 +510,11 @@ export function createWorld({ atlas }) {
   };
 
   let batch = []; // the sandbox's current list: cycled on the drum while the visitor is there
+  let sandboxPhase = null; // the induction step running in the sandbox, spelled on the drum
+  window.addEventListener('sandbox:phase', (e) => {
+    sandboxPhase = e.detail;
+    if (sandboxPhase !== 'sample') batch = [];
+  });
   window.addEventListener('sandbox:draws', (e) => {
     batch = [...e.detail];
     queue = [...batch];
@@ -527,6 +532,7 @@ export function createWorld({ atlas }) {
     inSandbox = here;
     if (intro.active) return { word: BOOKEND };
     if (c >= at('scope') + 0.5) return { word: BOOKEND };
+    if (here && sandboxPhase && sandboxPhase !== 'sample') return { word: sandboxPhase };
     if (here && batch.length) {
       if (!queue.length) queue = [...batch];
       return { queue: true };
@@ -687,6 +693,19 @@ export function createWorld({ atlas }) {
     }
   };
 
+  // Live anchors move with their shot's content (the sandbox's slot scrolls with its panels),
+  // so they are re-measured on screen every frame while that shot is near.
+  const live = Object.fromEntries(
+    ids.map((id) => [id, document.getElementById(id).querySelector('[data-rotor-live]')]).filter(([, a]) => a),
+  );
+  const followLive = () => {
+    for (const [id, anchor] of Object.entries(live)) {
+      if (Math.abs(pose.chapter - at(id)) >= 1) continue;
+      const r = anchor.getBoundingClientRect();
+      if (r.width && r.height) fits[id] = fit(r, POSES[id]);
+    }
+  };
+
   const poseFor = (id) => {
     const p = { ...POSES[id], ...fits[id] };
     if (id === 'method') {
@@ -700,6 +719,7 @@ export function createWorld({ atlas }) {
   const now3 = {};
   const update = (now) => {
     step(now);
+    followLive();
     const i0 = Math.max(0, Math.min(ids.length - 1, Math.floor(pose.chapter)));
     const i1 = Math.min(ids.length - 1, i0 + 1);
     const f = smooth(clamp01(pose.chapter - i0));
@@ -722,7 +742,7 @@ export function createWorld({ atlas }) {
       dist *= 1 + 1.6 * (1 - e);
       el += 0.35 * (1 - e);
       az -= 0.7 * (1 - e);
-      introGain = clamp01((now - intro.t0) / 600);
+      introGain = clamp01((now - intro.t0) / 1100);
       if (t >= 1) intro.active = false;
     }
 
@@ -837,7 +857,7 @@ export function createWorld({ atlas }) {
       intro.active = true;
       intro.t0 = performance.now();
       rings.forEach((r) => (r.offVel += 30)); // arrive spinning
-      spinTo(BOOKEND, intro.t0 + 350);
+      spinTo(BOOKEND, intro.t0 + 700, { slow: true });
     },
   };
 }

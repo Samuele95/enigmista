@@ -179,7 +179,7 @@
         <div class="rotor-anchor" data-rotor-anchor data-keepout aria-hidden="true"></div>
       </section>
 
-      <section class="scene scene--sandbox" id="sandbox" data-scene data-title="Sandbox" data-length="2" aria-labelledby="sandbox-title">
+      <section class="scene scene--sandbox" id="sandbox" data-scene data-title="Sandbox" data-length="2.6" aria-labelledby="sandbox-title">
         <div class="scene__body">
           <div class="eyebrow-row">
             <p class="label eyebrow" data-scramble>§06 · Sandbox</p>
@@ -187,31 +187,62 @@
           </div>
           <h2 id="sandbox-title" data-scramble>A grammar from sixteen fake passwords.</h2>
           <p class="lede">
-            A tiny corpus we invented, bundled with the page and run in your browser. Nowhere to type a password,
-            nothing sent anywhere — it illustrates <code>induce → sample</code>; it is not the engine.
+            Watch a tiny inducer run in your browser on a corpus we invented and bundled with the page. Nowhere to
+            type a password, nothing sent anywhere — it illustrates <code>induce → sample</code>; it is not the engine.
           </p>
-          <div class="sandbox" data-sandbox data-keepout>
+          <div class="sandbox-wrap" data-sandbox>
+          <div class="induce-head">
+            <div class="induce-head__text">
+              <ol class="induce-steps" data-steps aria-label="Induction steps">
+                <li data-step="segment">01 · Segment</li>
+                <li data-step="count">02 · Count templates</li>
+                <li data-step="slots">03 · Fill slots</li>
+                <li data-step="enrich">04 · Enrich <span>(scripted)</span></li>
+                <li data-step="sample">05 · Sample</li>
+              </ol>
+              <p class="label induce-status" data-status aria-live="polite"></p>
+            </div>
+            <div class="rotor-slot rotor-slot--live" data-rotor-anchor data-rotor-live aria-hidden="true"></div>
+          </div>
+          <div class="sandbox" data-keepout>
             <div class="sandbox__panel">
               <h3 class="label">Toy seed · train split</h3>
-              <ul class="tokens" data-train></ul>
-              <h3 class="label">Toy held-out · never shown</h3>
-              <ul class="tokens tokens--heldout" data-heldout></ul>
+              <ul class="chips" data-train></ul>
+              <p class="note legend"><b>W</b> word · <b>Wc</b> Word · <b>Y</b> year · <b>D</b> digit · <b>DD</b> two digits · <b>S</b> symbol</p>
+              <h3 class="label">Toy held-out · never shown <span class="reach" data-reach></span></h3>
+              <ul class="chips chips--heldout" data-heldout></ul>
             </div>
             <div class="sandbox__panel">
-              <h3 class="label">Grammar a model might induce</h3>
+              <h3 class="label">Induced grammar</h3>
               <ol class="templates" data-templates></ol>
-              <p class="note">Themes: <span data-themes></span>. <span class="enriched">+</span> = not in the seed: the enrichment pass.</p>
+              <div class="dicts" data-dicts></div>
+              <p class="note" data-enrich-note hidden>
+                <span class="enriched">+</span> terms were added by a scripted stand-in for the enrichment pass —
+                in the real loop a frontier model proposes them.
+              </p>
             </div>
             <div class="sandbox__panel">
-              <h3 class="label">Sampled · τ = 1.4</h3>
+              <h3 class="label">Sampled</h3>
+              <label class="tau">
+                <span class="label">Temperature τ <output data-tau-out>1.4</output></span>
+                <input type="range" min="0.6" max="2.4" step="0.1" value="1.4" data-tau aria-describedby="tau-hint" />
+                <span class="note" id="tau-hint">Low τ hugs the likeliest templates; high τ reaches the tails.</span>
+              </label>
               <ol class="candidates" data-candidates></ol>
-              <button class="btn" type="button" data-resample>Sample again</button>
+              <div class="sandbox__actions">
+                <button class="btn" type="button" data-resample>Sample again</button>
+                <button class="btn btn--quiet" type="button" data-replay>Replay induction</button>
+              </div>
               <p class="note" data-tally></p>
-              <p class="note">This small, coverage saturates and means nothing — the real loop runs on real-sized, authorised corpora.</p>
             </div>
           </div>
+          </div>
+          <p class="note">
+            Reachable is not covered: after enrichment the grammar <em>can</em> produce every held-out entry, but a
+            handful of draws rarely lands on them. On real corpora the probability ranking decides coverage — which is
+            why the real loop scores candidates in guess order against a frozen held-out split.
+          </p>
         </div>
-        <div class="rotor-anchor" data-rotor-anchor data-keepout aria-hidden="true"></div>
       </section>
 
       <!-- The one paper scene: the field settles to stillness under it. -->
