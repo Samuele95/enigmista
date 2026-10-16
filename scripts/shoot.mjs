@@ -25,7 +25,10 @@ for (const [i, [id, n]] of scenes.entries()) {
       const first = window.__stage.beats().findIndex((b) => b.scene === i);
       window.__stage.beat(first + k);
     }, i, k);
-    await sleep(1800);
+    await page
+      .waitForFunction(() => document.querySelector('.scene.is-active .beat.is-current.is-read'), { timeout: 6000 })
+      .catch(() => console.error(`${id} ${k}: caption never revealed`));
+    await sleep(1200);
     await page.evaluate(() => window.__field.frames(40, 33));
     await page.screenshot({ path: `${out}/${w}-${String(i)}${id}-${k}.png` });
   }

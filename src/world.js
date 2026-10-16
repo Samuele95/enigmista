@@ -39,7 +39,6 @@ const LOOP_R = R * 2.3;
 const FOV = 30;
 const BOOKEND = 'enigmista';
 const STATIONS = ['corpus', 'induce', 'sample', 'score', 'refine', 'stop'];
-const CHAPTER_WORD = { hero: BOOKEND, structure: 'structure', uses: 'uses', objective: 'objective', method: 'method', sandbox: 'sandbox', install: BOOKEND };
 const DISC_Y = -6; // the distribution lies below the drum; the camera dives to it
 
 // Palette as raw display values: the whole pipeline stays in these numbers (no colour-space
@@ -88,7 +87,8 @@ const SHOTS = {
     station({ ghost: 1 }), station({ az: -0.1 }), station({}),
   ],
   sandbox: [
-    ...Array.from({ length: 5 }, () => shot({ az: -0.4, dim: 0, aura: 0 })), // the induction owns the frame
+    // The drum rides a band above the induction and dials each step's name.
+    ...Array.from({ length: 5 }, () => shot({ az: -0.3, el: 0.06, aura: 0.5, box: [0.5, 0.085, 0.92, 0.15] })),
     shot({ az: -0.45, el: 0.12, aura: 0.9, box: [0.33, 0.5, 0.64, 0.7], nbox: [0.27, 0.45, 0.54, 0.8] }), // sample
   ],
   scope: Array.from({ length: 5 }, () => shot({ az: 1.4, dim: 0.2, aura: 0 })),
@@ -494,6 +494,17 @@ export function createWorld({ atlas }) {
   const hoverLabel = makeLabel('world-label--hover');
   dartLabel.dataset.keepIn = hoverLabel.dataset.keepIn = '-';
   const stationLabel = makeLabel('world-label--station');
+
+  // The tether: a hairline from the current caption's readout to where its text comes from.
+  const SVG = 'http://www.w3.org/2000/svg';
+  const tether = document.createElementNS(SVG, 'svg');
+  tether.setAttribute('class', 'tether');
+  tether.setAttribute('aria-hidden', 'true');
+  const tetherPath = document.createElementNS(SVG, 'path');
+  const tetherDot = document.createElementNS(SVG, 'circle');
+  tetherDot.setAttribute('r', '3');
+  tether.append(tetherPath, tetherDot);
+  document.body.append(tether);
   const tmp = new Vector3();
   const place = (el, point, opacity, inRotor = true) => {
     if (opacity < 0.02) {
@@ -534,7 +545,7 @@ export function createWorld({ atlas }) {
     return Array.from({ length: RINGS }, (_, i) => chars[i - pad] ?? { ch: ' ', slot: ' ' });
   };
 
-  const spinTo = (word, now, { chars, fast = false, slow = false } = {}) => {
+  const spinTo = (word, now, { chars, fast = false, slow = false, medium = false } = {}) => {
     current = word;
     hit = TOY_HELDOUT.has(word);
     const cells = centred(chars ?? [...word].map((ch) => ({ ch, slot: 'name' })));
@@ -546,8 +557,8 @@ export function createWorld({ atlas }) {
       const rest = (((ring.angle - base) % TAU) + TAU) % TAU;
       ring.from = ring.angle;
       ring.to = ring.angle - turns * TAU - rest;
-      ring.t0 = now + i * (fast ? 40 : slow ? 150 : 85) + Math.random() * (fast ? 50 : 120);
-      ring.dur = fast ? 520 + Math.random() * 200 : slow ? 2100 + Math.random() * 500 : 1250 + Math.random() * 450;
+      ring.t0 = now + i * (fast ? 40 : slow ? 150 : medium ? 60 : 85) + Math.random() * (fast ? 50 : 120);
+      ring.dur = fast ? 520 + Math.random() * 200 : slow ? 2100 + Math.random() * 500 : medium ? 820 + Math.random() * 300 : 1250 + Math.random() * 450;
       ring.slot = slot;
       ringState[i] = 0;
     });
@@ -587,16 +598,16 @@ export function createWorld({ atlas }) {
   const throwDart = (now, byUser) => {
     const leaf = disc.throwDart(now);
     lastThrow = now;
+    // The drum dials what the dart drew: the caption's readout reads it off the discs.
+    if (leaf) spinTo(leaf.pw, now, { chars: leaf.parts.flatMap((p) => [...p.text].map((ch) => ({ ch, slot: p.slot }))), fast: true });
     if (byUser) userThrow = now;
     if (leaf?.held) window.dispatchEvent(new CustomEvent('disc:hit', { detail: leaf.pw }));
   };
   document.querySelectorAll('[data-disc-throw]').forEach((b) => b.addEventListener('click', () => throwDart(performance.now(), true)));
 
   let batch = []; // the sandbox's current list: cycled on the drum while the visitor is there
-  let sandboxPhase = null; // the induction step running in the sandbox, spelled on the drum
   window.addEventListener('sandbox:phase', (e) => {
-    sandboxPhase = e.detail;
-    if (sandboxPhase !== 'sample') batch = [];
+    if (e.detail !== 'sample') batch = [];
   });
   window.addEventListener('sandbox:draws', (e) => {
     batch = [...e.detail];
@@ -608,36 +619,40 @@ export function createWorld({ atlas }) {
   const at = (id) => ids.indexOf(id);
   const pose = { chapter: 0, local: 0, transit: 0, velocity: 0 };
   let inSandbox = false;
-  let arrival = null; // on reaching a chapter, the drum spells its name
-  window.addEventListener('stage:scene', (e) => {
-    const word = CHAPTER_WORD[e.detail];
-    arrival = word ? { word, t: performance.now() } : null;
+  // Every caption beat names what the drum dials (data-word): a word, or a mode — ~sample (draw
+  // from the toy grammar), ~queue (the sandbox's list), ~dart (whatever the disc's darts draw).
+  // Each new beat re-dials, so its caption can wait for the lock and read itself off the discs.
+  const beat = { el: null, word: null, hold: 0, redial: false, cells: [], from: null };
+  window.addEventListener('stage:beat', (e) => {
+    const el = document.getElementById(e.detail.scene)?.querySelectorAll('.scene__body > .beat')[e.detail.beat] ?? null;
+    Object.assign(beat, {
+      el,
+      word: el?.dataset.word ?? null,
+      hold: Number(el?.dataset.hold ?? 1700),
+      redial: true,
+      cells: el ? [...el.querySelectorAll('.readout__cell')] : [],
+      from: el?.querySelector('[data-tether]') ?? el?.querySelector('.readout') ?? null,
+    });
   });
   // The caption beat the visitor is on, within the current chapter.
   const beatIn = (id) => Math.round(pose.local * Math.max(0, SHOTS[id].length - 1));
   const here = (id) => Math.abs(pose.chapter - at(id)) < 0.5;
   const stationOf = () => (here('method') ? beatIn('method') - 1 : -1); // -1: the chapter's intro beat
   const mode = () => {
-    const c = pose.chapter;
     const inBox = here('sandbox');
     if (inBox && !inSandbox) window.dispatchEvent(new CustomEvent('sandbox:request')); // replay its list
     inSandbox = inBox;
     if (intro.active) return { word: BOOKEND };
-    if (arrival && performance.now() - arrival.t < 3400) return { word: arrival.word };
-    if (here('structure') && beatIn('structure') === 2) return { sample: true, fast: true, hold: 420 };
-    if (c >= at('scope') + 0.5) return { word: BOOKEND };
-    if (inBox && sandboxPhase && sandboxPhase !== 'sample') return { word: sandboxPhase };
-    if (inBox && batch.length) {
+    const w = beat.word;
+    if (!w) return { sample: true, hold: 1700 };
+    if (w === '~sample') return { sample: true, fast: true, hold: beat.hold };
+    if (w === '~dart') return { dart: true };
+    if (w === '~queue') {
+      if (!batch.length) return { sample: true, fast: true, hold: 900 };
       if (!queue.length) queue = [...batch];
       return { queue: true };
     }
-    if (here('method') && stationOf() >= 0) {
-      const s = stationOf();
-      if (s === 2) return { sample: true, fast: true, hold: 350 };
-      if (s === 3) return { sample: true, fast: true, hold: 700 };
-      return { word: STATIONS[s], refine: s === 4 };
-    }
-    return { sample: true, hold: 1700 };
+    return { word: w, refine: w === 'refine' };
   };
 
   let lastNow = 0;
@@ -677,8 +692,15 @@ export function createWorld({ atlas }) {
       holdUntil = now + (want.queue ? 650 : hit ? Math.max(2200, want.hold ?? 0) : want.hold ?? 1700);
     }
 
-    if (want.word && current !== want.word) {
-      spinTo(want.word, now, { fast: !intro.active });
+    const redial = beat.redial && !intro.active;
+    beat.redial = false;
+    if (want.word && (current !== want.word || redial)) {
+      spinTo(want.word, now, { medium: true });
+    } else if (want.dart && redial && now3.disc > 0.3) {
+      throwDart(now, false);
+    } else if (redial && (want.sample || want.queue)) {
+      if (want.queue && queue.length) spinTo(queue.shift(), now, { fast: true });
+      else drawSample(now, true);
     } else if (want.queue && phase === 'hold' && now > holdUntil) {
       spinTo(queue.shift(), now, { fast: true });
     } else if (want.sample && phase === 'hold' && now > holdUntil) {
@@ -915,6 +937,57 @@ export function createWorld({ atlas }) {
     discReadouts.forEach((r) => r.textContent !== text && (r.textContent = text));
   };
 
+  // The current caption's readout mirrors the drum's front row, glyph for glyph: scrambling while a
+  // disc spins, ember once it clicks into place, teal on a toy held-out hit.
+  const readAndTether = () => {
+    beat.cells.forEach((cell, i) => {
+      if (i >= RINGS) return;
+      const slot = (((Math.round((-ringAngle[i] / TAU) * SLOTS) % SLOTS) + SLOTS) % SLOTS);
+      const ch = RING_SET[slot].trim();
+      if (cell.textContent !== ch) cell.textContent = ch;
+      const cls = Math.abs(ringVel[i]) > 1.5 ? 'readout__cell is-spin' : ringState[i] >= 2 ? 'readout__cell is-hit' : ringState[i] >= 1 ? 'readout__cell is-lock' : 'readout__cell';
+      if (cell.className !== cls) cell.className = cls;
+    });
+
+    // Where the text comes from: the dart on the disc, a Uses branch tip, the Method station, or
+    // the drum's reading row (its near end on wide screens, its underside on phones).
+    let src = null;
+    const narrowView = view.w < 900 || view.w / view.h < 1.1;
+    if (now3.disc > 0.6) {
+      if (disc.dart.node) src = atDisc(disc.dart.node);
+    } else if (here('uses') && beatIn('uses') > 0) {
+      src = tmp.copy(branchTips[beatIn('uses') - 1]);
+    } else if (here('method') && stationOf() >= 0) {
+      src = loopNodes[stationOf()].getWorldPosition(tmp);
+    } else if (now3.dim > 0.3) {
+      src = rotor.localToWorld(
+        narrowView ? tmp.set(0, -CAP_R - 0.05, CAP_R * 0.5) : tmp.set(ringX[0] - PITCH * 0.7, 0, R + 0.06),
+      );
+    }
+    const from = beat.from;
+    const r = from && from.offsetParent ? from.getBoundingClientRect() : null;
+    const shown = src && r && r.width && pose.transit < 0.15 && beat.el?.classList.contains('is-read');
+    tether.classList.toggle('is-on', !!shown);
+    if (!shown) return;
+    src.project(camera);
+    const ex = ((src.x + 1) / 2) * view.w;
+    const ey = ((1 - src.y) / 2) * view.h;
+    if (src.z > 1 || ex < -50 || ex > view.w + 50 || ey < -50 || ey > view.h + 50) {
+      tether.classList.remove('is-on');
+      return;
+    }
+    const sx = narrowView ? r.left + Math.min(r.width, 280) / 2 : r.right + 10;
+    const sy = narrowView ? r.top - 8 : r.top + r.height / 2;
+    const d = narrowView
+      ? `M${sx},${sy} C${sx},${(sy + ey) / 2} ${ex},${(sy + ey) / 2} ${ex},${ey}`
+      : `M${sx},${sy} C${(sx + ex) / 2},${sy} ${(sx + ex) / 2},${ey} ${ex},${ey}`;
+    tetherPath.setAttribute('d', d);
+    tetherDot.setAttribute('cx', ex.toFixed(1));
+    tetherDot.setAttribute('cy', ey.toFixed(1));
+    tether.classList.toggle('is-locked', phase === 'hold');
+    tether.classList.toggle('is-hit', phase === 'hold' && hit);
+  };
+
   const now3 = {};
   const update = (now) => {
     step(now);
@@ -1057,6 +1130,7 @@ export function createWorld({ atlas }) {
     placeDiscLabels();
     readoutLabel.textContent = `toy sampler · ${tally.drawn} drawn · held-out ${tally.hits.size}/${TOY_HELDOUT.size} hit`;
     place(readoutLabel, new Vector3(0, -CAP_R - 1.05, 0), now3.readout);
+    readAndTether();
     stationLabel.textContent = `station ${String(station + 1).padStart(2, '0')} · ${STATIONS[station]}`;
     place(stationLabel, new Vector3(0, -LOOP_R - 0.45, 0), now3.station * (inMethod ? 1 : 0));
   };

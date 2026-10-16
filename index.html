@@ -70,9 +70,9 @@
            time over a full-frame visualization; in calm mode the beats read as a document. -->
       <section class="scene scene--hero" id="hero" data-scene data-title="Enigmista" aria-labelledby="hero-title">
         <div class="scene__body">
-          <div class="beat beat--hero" data-hint="Drag the Rotor up or down to turn it · click it to draw a sample · scroll for the story">
+          <div class="beat beat--hero" data-word="enigmista" data-hint="Drag the Rotor up or down to turn it · click it to draw a sample · scroll for the story">
             <p class="label eyebrow" data-scramble>§01 · A grammar machine for authorised research</p>
-            <h1 class="wordmark" id="hero-title"><span data-scramble>Enigmista</span><span class="dot">.</span></h1>
+            <h1 class="wordmark" id="hero-title" data-tether><span data-scramble>Enigmista</span><span class="dot">.</span></h1>
             <p class="caption">
               Models the structure of an <em>authorised</em> password corpus and generates new, previously-unseen
               candidates that fit its distribution — for policy audits, honeyword decoys, synthetic data, and research.
@@ -85,7 +85,7 @@
 
       <section class="scene" id="structure" data-scene data-title="Structure" aria-labelledby="structure-title">
         <div class="scene__body">
-          <div class="beat">
+          <div class="beat" data-word="structure">
             <p class="label eyebrow" data-scramble>§02 · Structure</p>
             <h2 id="structure-title" data-scramble>It reads the shape of a corpus, never the secrets of a person.</h2>
             <p class="caption">
@@ -93,14 +93,14 @@
               grammar underneath: the templates people reach for, the slots they fill.
             </p>
           </div>
-          <div class="beat">
+          <div class="beat" data-word="grammar">
             <p class="label">Neural · the language model</p>
             <p class="caption">
               Induces the grammar from the seed — names the themes, sorts the slots, and extends the dictionaries
               with plausible members it was never shown.
             </p>
           </div>
-          <div class="beat">
+          <div class="beat" data-word="~sample" data-hold="420">
             <p class="label">Symbolic · sampler &amp; scorer</p>
             <p class="caption">
               A deterministic sampler draws candidates in probability order; a scorer checks them against real
@@ -112,19 +112,19 @@
 
       <section class="scene" id="uses" data-scene data-title="Uses" aria-labelledby="uses-title">
         <div class="scene__body">
-          <div class="beat">
+          <div class="beat" data-word="defensive">
             <p class="label eyebrow" data-scramble>§03 · Uses</p>
             <h2 id="uses-title" data-scramble>Three uses. All defensive.</h2>
           </div>
-          <div class="beat">
+          <div class="beat" data-word="audit">
             <p class="label slot">⟨audit⟩ · Password-policy audits</p>
             <p class="caption">Test a policy you're authorised to audit against the realistic structure of the passwords it governs.</p>
           </div>
-          <div class="beat">
+          <div class="beat" data-word="decoy">
             <p class="label slot">⟨decoy⟩ · Honeywords &amp; decoys</p>
             <p class="caption">Decoys that fit the corpus's distribution. The more plausible the decoy, the more reliably a login with it signals a breach.</p>
           </div>
-          <div class="beat">
+          <div class="beat" data-word="synth">
             <p class="label slot">⟨synth⟩ · Synthetic data &amp; research</p>
             <p class="caption">Password sets with the statistical shape of the real thing — for testing systems and studying how people choose.</p>
           </div>
@@ -133,7 +133,7 @@
 
       <section class="scene" id="objective" data-scene data-title="Objective" aria-labelledby="objective-title">
         <div class="scene__body">
-          <div class="beat">
+          <div class="beat" data-word="~sample" data-hold="1700">
             <p class="label eyebrow" data-scramble>§04 · Objective</p>
             <h2 id="objective-title" data-scramble>Predict the passwords you haven't seen.</h2>
             <p class="caption">
@@ -141,7 +141,7 @@
               judged on a frozen held-out split it never trained on.
             </p>
           </div>
-          <div class="beat" data-hint="Hover a slice to read its odds · click the disc to throw a dart">
+          <div class="beat" data-word="~dart" data-hint="Hover a slice to read its odds · click the disc to throw a dart">
             <p class="label">The kernel, in geometry</p>
             <p class="caption">
               Below the drum lies what it draws from: the toy grammar as a disc of probability. The inner ring splits
@@ -153,7 +153,7 @@
             </div>
             <p class="note stage-only" data-disc-readout></p>
           </div>
-          <div class="beat" data-hint="Slide τ and watch the slices re-divide · click the disc to throw a dart">
+          <div class="beat" data-word="~dart" data-hint="Slide τ and watch the slices re-divide · click the disc to throw a dart">
             <p class="label">Temperature · τ</p>
             <p class="caption">
               A sample is a dart thrown at a uniform angle and read outward, ring by ring. τ reshapes the disc: low τ
@@ -174,32 +174,32 @@
 
       <section class="scene scene--method" id="method" data-scene data-title="Method" aria-labelledby="method-title">
         <div class="scene__body">
-          <div class="beat">
+          <div class="beat" data-word="method">
             <p class="label eyebrow" data-scramble>§05 · Method</p>
             <h2 id="method-title" data-scramble>A loop that only believes its scorer.</h2>
             <p class="caption"><code>induce → sample → score → analyse misses → refine</code>, until coverage plateaus or hits a target.</p>
           </div>
-          <div class="beat">
+          <div class="beat" data-word="corpus">
             <p class="label">01 · Corpus &amp; protocol</p>
             <p class="caption">Load the authorised seed, deduplicate, freeze an 80/20 train / held-out split — once, never re-split. Markov and PCFG baselines set the number to beat.</p>
           </div>
-          <div class="beat">
+          <div class="beat" data-word="induce">
             <p class="label">02 · Induce</p>
             <p class="caption">A language model builds the grammar from the training split; on a frontier model, an enrichment pass adds plausible unseen terms.</p>
           </div>
-          <div class="beat">
+          <div class="beat" data-word="~sample" data-hold="350">
             <p class="label">03 · Sample</p>
             <p class="caption">Draw a budget of candidates at temperature τ, ordered by probability — the guess order.</p>
           </div>
-          <div class="beat">
+          <div class="beat" data-word="~sample" data-hold="700">
             <p class="label">04 · Score</p>
             <p class="caption">The bundled scorer measures coverage of the held-out split. Never self-assessed: no improvement is claimed without its numbers.</p>
           </div>
-          <div class="beat">
+          <div class="beat" data-word="refine">
             <p class="label">05 · Analyse misses &amp; refine</p>
             <p class="caption">Read the held-out passwords it missed, hypothesise the missing structure, refine the grammar, go round again.</p>
           </div>
-          <div class="beat">
+          <div class="beat" data-word="stop">
             <p class="label">06 · Stop</p>
             <p class="caption">When coverage beats the best baseline and gains plateau — or the iteration cap is reached.</p>
           </div>
@@ -210,7 +210,7 @@
         <!-- Stage only: the full-frame toy induction, drawn in the same glyph language as the field. -->
         <div class="induce-viz" data-induce-viz aria-hidden="true"></div>
         <div class="scene__body">
-          <div class="beat">
+          <div class="beat" data-word="toy corpus">
             <div class="eyebrow-row">
               <p class="label eyebrow" data-scramble>§06 · Sandbox</p>
               <p class="label tag">Illustrative · toy data</p>
@@ -221,23 +221,23 @@
               anywhere — it illustrates <code>induce → sample</code>; it is not the engine.
             </p>
           </div>
-          <div class="beat" data-step="segment">
+          <div class="beat" data-word="segment" data-step="segment">
             <p class="label">01 · Segment</p>
             <p class="caption">Each password splits into slots by character class: word, year, digit, symbol.</p>
           </div>
-          <div class="beat" data-step="count">
+          <div class="beat" data-word="count" data-step="count">
             <p class="label">02 · Count templates</p>
             <p class="caption">Passwords with the same slot pattern stack together. The stacks are the template probabilities.</p>
           </div>
-          <div class="beat" data-step="slots">
+          <div class="beat" data-word="slots" data-step="slots">
             <p class="label">03 · Fill slots</p>
             <p class="caption">Each slot keeps the terms the seed used, weighted by how often. From the seed alone, <span data-reach-seed></span> of the held-out passwords are reachable.</p>
           </div>
-          <div class="beat" data-step="enrich">
+          <div class="beat" data-word="enrich" data-step="enrich">
             <p class="label">04 · Enrich <span class="muted">(scripted here)</span></p>
             <p class="caption">Plausible terms the seed never showed are added — in the real loop a frontier model proposes them. Now <span data-reach-all></span> are reachable — reachable, not yet covered.</p>
           </div>
-          <div class="beat" data-step="sample" data-hint="Slide τ, then press Sample again · the Rotor spells each draw">
+          <div class="beat" data-word="~queue" data-step="sample" data-hint="Slide τ, then press Sample again · the Rotor spells each draw">
             <p class="label">05 · Sample</p>
             <p class="caption">The Rotor draws from the induced grammar — every candidate on the right is one spin. Move τ and sample again.</p>
             <div class="viz-controls stage-only">
@@ -344,7 +344,7 @@
 
       <section class="scene scene--install" id="install" data-scene data-title="Install" aria-labelledby="install-title">
         <div class="scene__body">
-          <div class="beat">
+          <div class="beat" data-word="enigmista">
             <p class="label eyebrow" data-scramble>§08 · Install</p>
             <h2 id="install-title" data-scramble>Run the real loop.</h2>
             <p class="caption">
@@ -352,7 +352,7 @@
               <strong>Gemini CLI</strong>, or a local model on <strong>Hermes</strong>. It hands back at every checkpoint.
             </p>
           </div>
-          <div class="beat">
+          <div class="beat" data-word="install">
             <p class="label">01 · Get &amp; install</p>
             <pre class="terminal"><code data-type>unzip enigmista-skill.zip -d ~/.claude/skills/</code></pre>
             <p class="caption install-get">
@@ -361,7 +361,7 @@
               <a href="https://github.com/Samuele95/enigmista/releases/latest">release notes</a>.</span>
             </p>
           </div>
-          <div class="beat">
+          <div class="beat" data-word="scorer">
             <p class="label">02 · Smoke-test the scorer</p>
             <pre class="terminal"><code data-type>python3 scripts/eval_coverage.py \
   --heldout assets/sample/normal/heldout.txt \
@@ -371,7 +371,7 @@
   --out /tmp/out.json --cutoffs 5 10 100 --primary 100
 SUMMARY: cov@100=75.0% (hit 3/4 held-out) Δbaseline=+25.0pts novelty=57.14% cands=14</code></pre>
           </div>
-          <div class="beat">
+          <div class="beat" data-word="seed corpus">
             <p class="label">03 · Bring an authorised corpus</p>
             <p class="caption">
               Put your seed in <code>data/seed.txt</code> and start the loop — baselines come back first. Prefer to talk

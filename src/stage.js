@@ -13,6 +13,7 @@
 // first ENTER, holds, exits over the last ENTER; between shots there is a text-free transit.
 import { scrambleIn } from './scramble-text.js';
 
+const READOUT_CELLS = 12; // one per disc on the Rotor
 const ENTER = 0.42; // viewport heights spent entering / exiting a shot
 const TRAVEL = 0.55; // field px per playhead px: how fast the glyph world rushes past
 const CUT_MS = 2600; // chapter-to-chapter flight
@@ -56,6 +57,21 @@ export function startStage({ field, world } = {}) {
     body.replaceWith(win);
     win.append(body);
     const beatEls = [...body.querySelectorAll(':scope > .beat')];
+    // Beats the Rotor dials get a readout: twelve cells mirroring the drum's front row. Their
+    // caption waits for the discs to lock, then reads itself off them.
+    beatEls.forEach((b) => {
+      if (!b.dataset.word || b.querySelector('[data-tether]')) return;
+      const readout = document.createElement('div');
+      readout.className = 'readout';
+      readout.setAttribute('aria-hidden', 'true');
+      for (let i = 0; i < READOUT_CELLS; i++) {
+        const cell = document.createElement('span');
+        cell.className = 'readout__cell';
+        readout.append(cell);
+      }
+      b.prepend(readout);
+      b.classList.add('is-gated');
+    });
     return {
       el, body, win, beatEls,
       title: el.dataset.title,
@@ -247,17 +263,44 @@ export function startStage({ field, world } = {}) {
     remeasure = setTimeout(() => field?.refreshKeepOut(), 1300); // after the headline deciphers
   };
 
-  // A beat becomes current: its caption fades in, its headline deciphers, its terminal types.
+  // A beat becomes current: the Rotor dials its word; once the discs lock, the caption reads
+  // itself off them — headline deciphers, prose rises, terminals type. Beats without a readout
+  // (hero, the paper statements) reveal at once.
+  let unwait = null;
+  const read = (el) => {
+    el.classList.add('is-read');
+    el.querySelectorAll('[data-scramble]').forEach((t, n) =>
+      scrambleIn(t, { delay: 120 + n * 120, duration: t.matches('h1 *') ? 1900 : 900 }),
+    );
+    el.querySelectorAll('[data-type]').forEach((t) => typeOut(t));
+  };
   const showBeat = (s, k) => {
     if (s.current === k) return;
     s.current = k;
-    s.beatEls.forEach((el, j) => el.classList.toggle('is-current', j === k));
+    s.beatEls.forEach((el, j) => {
+      el.classList.toggle('is-current', j === k);
+      if (j !== k) el.classList.remove('is-read');
+    });
     const el = s.beatEls[k];
     if (!el) return;
-    el.querySelectorAll('[data-scramble]').forEach((t, n) =>
-      scrambleIn(t, { delay: 250 + n * 120, duration: t.matches('h1 *') ? 1900 : 900 }),
-    );
-    el.querySelectorAll('[data-type]').forEach((t) => typeOut(t));
+    unwait?.();
+    if (el.classList.contains('is-gated')) {
+      const word = el.dataset.word;
+      const done = () => {
+        unwait?.();
+        if (s.current === k) read(el);
+      };
+      const onLock = (e) => (word.startsWith('~') || e.detail === word) && done();
+      const timer = setTimeout(done, 4200); // never strand a caption if the drum is busy
+      window.addEventListener('rotor:locked', onLock);
+      unwait = () => {
+        clearTimeout(timer);
+        window.removeEventListener('rotor:locked', onLock);
+        unwait = null;
+      };
+    } else {
+      read(el);
+    }
     // What the visual responds to on this beat, spelled out under it.
     if (hint) {
       hint.classList.toggle('is-on', !!el.dataset.hint);

@@ -61,10 +61,15 @@ for (const vp of VIEWPORTS) {
   const ids = await page.evaluate(() => [...document.querySelectorAll('[data-scene]')].map((s) => s.id));
   for (let k = 0; k < beats.length; k++) {
     await page.evaluate((k) => window.__stage.beat(k), k);
-    await sleep(1300); // the caption's fade-in
+    // The caption waits for the Rotor to dial its word, then reads itself off the discs.
+    const read = await page
+      .waitForFunction(() => document.querySelector('.scene.is-active .beat.is-current.is-read'), { timeout: 6000 })
+      .then(() => true, () => false);
+    if (!read) note(`${tag} beat ${k}: caption never revealed`);
+    await sleep(300);
     const r = await page.evaluate(() => {
       window.__field.frames(4);
-      document.getAnimations().forEach((a) => a.finish()); // settle caption fades deterministically
+      document.getAnimations().filter((a) => a.effect?.getComputedTiming().endTime !== Infinity).forEach((a) => a.finish()); // settle caption fades
       const vw = document.documentElement.clientWidth;
       const vh = window.innerHeight;
       const scene = document.querySelector('.scene.is-active');
