@@ -1,7 +1,8 @@
 // Decipher-in for headings and labels: each character cycles within its own class
 // (letters stay letters, digits stay digits) and locks left→right. Never used on body prose.
 // Screen readers get the real text from a visually-hidden span (valid on any element, unlike
-// aria-label on a <p>); the animated glyphs are aria-hidden. Safe to call again on the same element.
+// aria-label on a <p>); the animated glyphs are aria-hidden, drawn over an invisible layout copy.
+// Safe to call again on the same element.
 import { classOf, randomOf } from './glyphs.js';
 
 const running = new WeakMap();
@@ -17,11 +18,18 @@ export function scrambleIn(el, { duration = 700, delay = 0, reducedMotion = fals
     const real = document.createElement('span');
     real.className = 'sr-only';
     real.textContent = text;
+    // Layout comes from an invisible copy of the real text; the glyphs draw on an overlay, so a
+    // wide random glyph ("W" for "i") can never reflow the line or resize the box mid-decipher.
+    const layout = document.createElement('span');
+    layout.className = 'scramble-layout';
+    layout.setAttribute('aria-hidden', 'true');
+    layout.textContent = text;
     span = document.createElement('span');
     span.dataset.scrambleGlyphs = '';
     span.setAttribute('aria-hidden', 'true');
-    span.textContent = text; // correct layout even before the first animation frame
-    el.replaceChildren(real, span);
+    span.textContent = text;
+    el.dataset.scrambleHost = '';
+    el.replaceChildren(real, layout, span);
   }
   const chars = [...el.dataset.text];
 

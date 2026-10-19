@@ -220,8 +220,9 @@ export function startStage({ field, world } = {}) {
 
   // Keys.
   window.addEventListener('keydown', (e) => {
-    if (e.target.closest('input, textarea')) return;
-    const onControl = e.target.closest('button, a');
+    const target = e.target instanceof Element ? e.target : null; // keys can arrive on window/document
+    if (target?.closest('input, textarea')) return;
+    const onControl = target?.closest('button, a');
     const k = e.key;
     if (k === 'ArrowDown' || k === 'PageDown' || (k === ' ' && !e.shiftKey && !onControl)) step(1);
     else if (k === 'ArrowUp' || k === 'PageUp' || (k === ' ' && e.shiftKey && !onControl)) step(-1);
@@ -291,7 +292,12 @@ export function startStage({ field, world } = {}) {
         if (s.current === k) read(el);
       };
       const onLock = (e) => (word.startsWith('~') || e.detail === word) && done();
-      const timer = setTimeout(done, 4200); // never strand a caption if the drum is busy
+      // Never strand a caption: if the drum hasn't locked 3.5 s after the camera arrives, reveal.
+      let timer = 0;
+      const arm = () => {
+        timer = playhead.moving ? setTimeout(arm, 120) : setTimeout(done, 3500);
+      };
+      arm();
       window.addEventListener('rotor:locked', onLock);
       unwait = () => {
         clearTimeout(timer);
@@ -305,7 +311,7 @@ export function startStage({ field, world } = {}) {
     if (hint) {
       hint.classList.toggle('is-on', !!el.dataset.hint);
       if (el.dataset.hint) {
-        hint.textContent = el.dataset.hint;
+        hint.textContent = `◇ ${el.dataset.hint}`; // the mark is text, so the decipher overlay aligns
         scrambleIn(hint, { delay: 900, duration: 700 });
       }
     }

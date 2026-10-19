@@ -659,6 +659,7 @@ export function createWorld({ atlas }) {
   let lastNudge = 0;
   const step = (now) => {
     const dt = Math.min(64, Math.max(1, now - lastNow));
+    const realDt = Math.min(250, Math.max(1, now - lastNow));
     lastNow = now;
     const want = mode();
 
@@ -668,16 +669,31 @@ export function createWorld({ atlas }) {
     let allLocked = true;
     rings.forEach((ring, i) => {
       const t = Math.min(1, Math.max(0, (now - ring.t0) / ring.dur));
-      ring.offVel += scramble * (2.2 + (i % 5) * 0.6) * (dt / 16);
+      // Free-spin and click-home, integrated in 16 ms substeps over the real elapsed time, so
+      // the discs settle on the same clock at 60 fps or on a struggling 8 fps machine.
+      for (let left = realDt; left > 0; left -= 16) {
+        const h = Math.min(16, left);
+        ring.offVel += scramble * (2.2 + (i % 5) * 0.6) * (h / 16);
+        // Click-home: ω ≈ 12 rad/s, ζ ≈ 0.75 — a ratchet that lands in ~0.4 s with a hint of
+        // overshoot (the old spring was overdamped, τ ≈ 1.5 s, and crawled for seconds).
+        const home = Math.round(ring.off / TAU) * TAU;
+        ring.offVel += (home - ring.off) * 0.144 * h * (1 - scramble) * (drag.on ? 0.03 : 1); // free while held
+        ring.offVel *= Math.exp(-0.018 * h);
+        ring.off += ring.offVel * (h / 1000);
+      }
       const home = Math.round(ring.off / TAU) * TAU;
-      ring.offVel += (home - ring.off) * 0.004 * dt * (1 - scramble);
-      ring.offVel *= 0.9;
-      ring.off += ring.offVel * (dt / 1000);
+      if (scramble < 1e-3 && Math.abs(ring.off - home) < 0.002 && Math.abs(ring.offVel) < 0.05) {
+        ring.off = home; // exactly on the glyph, not a hair beside it
+        ring.offVel = 0;
+      }
       ring.prev = ringAngle[i];
       ring.angle = ring.from + (ring.to - ring.from) * easeOutBack(t);
       ringAngle[i] = ring.angle + ring.off;
       ringVel[i] = ((ringAngle[i] - ring.prev) / dt) * 1000;
-      if (t < 1) allLocked = false;
+      // Locked = the dial has finished AND any transit free-spin has clicked home, so what the
+      // reading row shows is the word itself — captions reveal on this, and read it off the discs.
+      const settled = Math.abs(wrap(ring.off)) < 0.03 && Math.abs(ring.offVel) < 0.6;
+      if (t < 1 || !settled) allLocked = false;
       else if (phase === 'spin') ringState[i] = 1;
     });
 
@@ -1143,6 +1159,13 @@ export function createWorld({ atlas }) {
     debug: () => ({
       fits, now3: { ...now3 }, view: { ...view }, pose: { ...pose },
       loop: { rotZ: loop.rotation.z, station: stationOf() },
+      drum: {
+        phase, current, word: beat.word,
+        rings: rings.map((r, i) => ({
+          shown: RING_SET[(((Math.round((-ringAngle[i] / TAU) * SLOTS) % SLOTS) + SLOTS) % SLOTS)],
+          off: +r.off.toFixed(3), offVel: +r.offVel.toFixed(3), done: lastNow >= r.t0 + r.dur, state: ringState[i],
+        })),
+      },
     }),
     /** chapter: float scene index (fractional in transit); local: 0..1 progress within the scene;
      *  transit: 0 at rest → 1 mid-travel; velocity: signed scroll speed (viewports/s, smoothed). */
