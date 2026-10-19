@@ -884,7 +884,10 @@ export function createWorld({ atlas }) {
           width: bw * frame.width,
           height: bh * frame.height,
         };
-        return fit(box, sh);
+        // A frame too short to share (the smallest phones): the sandbox's induction takes all of it
+        // in steps 0–4 and the drum sits out — its readout still dials each step's word.
+        const crowded = id === 'sandbox' && sh.dim > 0 && !sh.nbox && frame.height < 220;
+        return crowded ? { ...fit(box, sh), dim: 0 } : fit(box, sh);
       });
     }
     if (was === undefined) delete root.dataset.chapter;

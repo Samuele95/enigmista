@@ -1552,19 +1552,20 @@ button {
 
 .vdicts {
   position: absolute;
-  inset: 0 0 24% 0;
+  inset: 0 0 auto 0; /* natural height; induce-viz.js fits it above the held-out row via --fit */
+  transform-origin: top center;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 1rem;
   align-content: start;
   opacity: 0;
-  transform: translateY(14px);
+  transform: translateY(14px) scale(var(--fit, 1));
   transition: opacity 0.9s ease, transform 1.1s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .viz-frame:is([data-step='3'], [data-step='4']) .vdicts {
   opacity: 1;
-  transform: none;
+  transform: scale(var(--fit, 1));
   transition-delay: 0.5s;
 }
 
@@ -1582,6 +1583,7 @@ button {
 .vterm {
   display: grid;
   grid-template-columns: 1fr auto;
+  align-items: baseline;
   gap: 0.15rem 0.5rem;
   font-size: clamp(0.7rem, 0.85vw, 0.85rem);
   transition: opacity 0.6s ease;
@@ -1723,8 +1725,13 @@ button {
   }
 
   .vdicts {
-    inset: 0 0 5.5rem 0;
-    gap: 0.4rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  /* Three dictionaries are enough to show the idea at this size, and stay legible. */
+  .vdict:is([data-dict='D'], [data-dict='S']) {
+    display: none;
   }
 
   .vdict {
@@ -1733,22 +1740,27 @@ button {
 
   .vdict .label {
     margin-bottom: 0.1rem;
-    font-size: 0.5rem;
-    letter-spacing: 0.04em;
+    font-size: 0.5625rem;
+    letter-spacing: 0.06em;
   }
 
   .vterm {
-    font-size: 0.625rem;
-    gap: 0 0.25rem;
+    font-size: 0.6875rem;
+    gap: 0.1rem 0.35rem;
   }
 
   .vterm__p {
-    font-size: 0.5rem;
+    font-size: 0.5625rem;
   }
 
   .vheld {
-    gap: 0.15rem 0.6rem;
-    font-size: 0.625rem;
+    gap: 0.1rem 0.55rem;
+    font-size: 0.5625rem;
+  }
+
+  .vheld__label {
+    font-size: 0.5rem;
+    letter-spacing: 0.06em;
   }
 
   .vcands {
@@ -2031,4 +2043,18 @@ span[data-scramble-host] {
 [data-scramble-glyphs] {
   position: absolute;
   inset: 0;
+}
+
+/* Phones: once the dictionaries rise, the previous step's faded stacks step aside. */
+@media (max-width: 899px), (max-aspect-ratio: 11/10) {
+  .viz-frame:is([data-step='3'], [data-step='4']) :is(.vtok, .vhead) {
+    opacity: 0 !important;
+  }
+}
+
+/* The smallest phones: the induction takes the whole frame (the drum sits out, see world.js). */
+@media (max-width: 899px) and (max-height: 700px) {
+  .is-stage .induce-viz {
+    top: var(--win-top);
+  }
 }

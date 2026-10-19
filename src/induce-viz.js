@@ -89,10 +89,12 @@ export function mountInduceViz(root, scene) {
     const rows = TOY_ENRICHED_GRAMMAR.slots[k];
     if (!rows) continue;
     const col = el('div', 'vdict');
+    col.dataset.dict = k; // phones show word · year · two digits only (styles.css)
     col.append(el('p', 'label', `⟨${tag(k)}⟩`));
     for (const r of rows) {
       const row = el('div', `vterm${r.enriched ? ' vterm--enriched' : ''}`);
-      row.append(el('span', 'vterm__text', `${r.enriched ? '+' : ''}${r.term}`), el('i', 'vterm__bar'), el('span', 'vterm__p'));
+      // One line per term — text and odds side by side, the bar as an underline beneath them.
+      row.append(el('span', 'vterm__text', `${r.enriched ? '+' : ''}${r.term}`), el('span', 'vterm__p'), el('i', 'vterm__bar'));
       col.append(row);
       const seed = TOY_INDUCED.slots[k].find((s) => s.term === r.term);
       terms.push({ row, seedP: seed?.p ?? 0, finalP: r.p, enriched: r.enriched });
@@ -243,9 +245,18 @@ export function mountInduceViz(root, scene) {
     if (step >= 1) window.dispatchEvent(new CustomEvent('sandbox:phase', { detail: STEPS[step] }));
     if (step === 5 && lastDraws) window.dispatchEvent(new CustomEvent('sandbox:draws', { detail: lastDraws }));
   });
+  // The dictionaries scale down to whatever room the frame leaves above the held-out row, so on
+  // a short or narrow frame they shrink instead of running into it (or out of the frame).
+  const fitDicts = () => {
+    dicts.style.setProperty('--fit', '1');
+    const room = held.offsetTop - 10;
+    const fit = Math.min(1, room / Math.max(1, dicts.offsetHeight), box.clientWidth / Math.max(1, dicts.scrollWidth));
+    dicts.style.setProperty('--fit', fit.toFixed(3));
+  };
   const relayout = () => {
     measure();
     layout();
+    fitDicts();
   };
   new ResizeObserver(relayout).observe(box);
   document.fonts.ready.then(relayout);
