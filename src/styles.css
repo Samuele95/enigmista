@@ -1547,7 +1547,7 @@ button {
 }
 
 .viz-frame:is([data-step='3'], [data-step='4']) .vhead {
-  opacity: 0.35;
+  opacity: 0; /* the stacks' labels give way to the dictionaries and the held-out row */
 }
 
 .vdicts {
