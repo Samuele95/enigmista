@@ -10,7 +10,7 @@
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/licence-MIT-e9e4d8?style=flat-square&labelColor=10131a"></a>
 </p>
 
-<p align="center"><b>A neurosymbolic grammar machine for authorised password research,</b><br>
+<p align="center"><b>A neurosymbolic grammar machine for authorised password research</b><br>
 </p>
 
 ---
