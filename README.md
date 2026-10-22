@@ -11,7 +11,7 @@
 </p>
 
 <p align="center"><b>A neurosymbolic grammar machine for authorised password research,</b><br>
-and the cinematic site that explains it.</p>
+</p>
 
 ---
 
