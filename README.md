@@ -7,6 +7,7 @@
   <a href="https://github.com/Samuele95/enigmista/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Samuele95/enigmista?style=flat-square&color=e9e4d8&labelColor=10131a&label=release"></a>
   <a href="https://github.com/Samuele95/enigmista/actions/workflows/deploy.yml"><img alt="Deploy to GitHub Pages" src="https://github.com/Samuele95/enigmista/actions/workflows/deploy.yml/badge.svg"></a>
   <img alt="No analytics, no trackers" src="https://img.shields.io/badge/analytics-none-3cc6b4?style=flat-square&labelColor=10131a">
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/licence-MIT-e9e4d8?style=flat-square&labelColor=10131a"></a>
 </p>
 
 <p align="center"><b>A neurosymbolic grammar machine for authorised password research,</b><br>
@@ -122,4 +123,4 @@ Every push to `main` deploys to GitHub Pages through `.github/workflows/deploy.y
 
 ## Licence
 
-No licence has been chosen for this repository yet. The fonts are under the SIL Open Font License, and Three.js under MIT.
+This repository is released under the [MIT License](LICENSE). The bundled fonts keep their own licence (SIL Open Font License), as does Three.js (MIT).
